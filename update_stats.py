@@ -83,10 +83,11 @@ def fetch_real_google_data(frequency, year_month):
 # ----------------------------------------------------------------------
 try:
     today     = datetime.datetime.utcnow()
-    yesterday = today - datetime.timedelta(days=1)
+    yesterday = today - datetime.timedelta(days=7)
 
     target_date_str = yesterday.strftime("%Y-%m-%d")
-    target_ym_str   = yesterday.strftime("%Y%m")
+    # target_ym_str   = yesterday.strftime("%Y%m")
+    target_ym_str = "202605"
 
     # Pull production metrics
     ios_live_units     = fetch_real_apple_data("DAILY", target_date_str)
