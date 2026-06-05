@@ -2,36 +2,43 @@ name: Dynamic Metrics Sync Dashboard
 
 on:
   schedule:
-    - cron: '0 2 * * 0'   # Every Sunday at 2:00 AM UTC
-    - cron: '0 2 1 * *'   # 1st of every month at 2:00 AM UTC
-  workflow_dispatch:        # Allows manual trigger anytime
+    - cron: '0 4 * * 0'  # Runs every Sunday at 4:00 AM UTC
+    - cron: '0 4 1 * *'  # Runs on the 1st of every month at 4:00 AM UTC
+  workflow_dispatch:     # Keeps manual triggers enabled!
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Copy Repo Code
-        uses: actions/checkout@v4
+    - name: Copy Repo Code
+      uses: actions/checkout@v4
 
-      - name: Initialize Python Environment
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Initialize Python Environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-      - name: Install Data Packages
-        run: pip install pandas
+    - name: Install Data & Security Packages
+      run: pip install pandas requests pyjwt cryptography google-cloud-storage
 
-      - name: Execute Painter Script
-        run: |
+    - name: Execute Painter Script
+      env:
+        APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+        APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+        APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+        APPLE_VENDOR_NUMBER: ${{ secrets.APPLE_VENDOR_NUMBER }}
+        GOOGLE_BUCKET_NAME: ${{ secrets.GOOGLE_BUCKET_NAME }}
+        ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
+        GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      run: |
           git fetch origin main
           git reset --hard origin/main
           python update_stats.py
 
-      - name: Commit Changes To Main Branch
-        run: |
-          git config --global user.name 'Stats-Dashboard-Bot'
-          git config --global user.email 'dashboard-bot@github.com'
-          git add README.md
-          git diff-index --quiet HEAD || git commit -m "docs: sync download statistics [skip ci]"
-          git push
+    - name: Commit Changes To Main Branch
+      run: |
+        git config --global user.name 'Stats-Dashboard-Bot'
+        git config --global user.email 'dashboard-bot@github.com'
+        git add README.md 
+        git diff-index --quiet HEAD || git commit -m "docs: sync real download statistics [skip ci]"
+        git push
