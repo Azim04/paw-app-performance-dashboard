@@ -25,6 +25,25 @@ GCP_KEY_JSON        = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 # ----------------------------------------------------------------------
 # 2. API CONNECTIONS ENGINE
 # ----------------------------------------------------------------------
+def fetch_apple_cumulative(start_year=2024):
+    """Fetch and sum all monthly reports since app launch"""
+    total = 0
+    today = datetime.datetime.utcnow()
+    year  = start_year
+    month = 1
+
+    while (year, month) <= (today.year, today.month):
+        date_str = f"{year}-{month:02d}"
+        units    = fetch_real_apple_data("MONTHLY", date_str)
+        print(f"  Apple {date_str}: {units} units")
+        total   += units
+        month   += 1
+        if month > 12:
+            month = 1
+            year += 1
+
+    return total
+    
 def fetch_real_apple_data(frequency, target_date):
     try:
         headers = {'alg': 'ES256', 'kid': APPLE_KEY_ID, 'typ': 'JWT'}
@@ -109,7 +128,7 @@ try:
     print(f"  APPLE_VENDOR_NUMBER : {'SET' if APPLE_VENDOR_NUMBER else '❌ MISSING'}")
     print(f"  APPLE_PRIVATE_KEY   : {'SET (length=' + str(len(APPLE_PRIVATE_KEY)) + ')' if APPLE_PRIVATE_KEY else '❌ MISSING'}")
 
-    ios_live_units = fetch_real_apple_data("DAILY", target_date_str)
+    ios_live_units = fetch_apple_cumulative(start_year=2020)
     print(f"  ✅ Apple result: {ios_live_units}")
 
     # ── Google ───────────────────────────────────────────────────────
