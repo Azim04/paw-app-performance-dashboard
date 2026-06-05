@@ -10,11 +10,11 @@ This repository tracks my application downloads across iOS and Android automatic
 +-------------------------------------------------------+
 | 📊 LIVE GROWTH PERFORMANCE (Sync Date: 2026-06-04) |
 +-------------------------------------------------------+
-| 🍏 iOS Cumulative App Store : 35 units
+| 🍏 iOS Cumulative App Store : 23,583 units
 | 🤖 Android Google Play Tally: 4,500 installs
 |
-| 🏆 GOAL MILESTONE           : 4,535 / 50,000
-| Milestone Progress         : [██░░░░░░░░░░░░░░░░░░] 9%
+| 🏆 GOAL MILESTONE           : 28,083 / 50,000
+| Milestone Progress         : [███████████░░░░░░░░░] 56%
 +-------------------------------------------------------+
 ```
 <!--END_DASHBOARD-->
