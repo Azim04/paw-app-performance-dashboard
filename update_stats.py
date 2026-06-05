@@ -26,7 +26,6 @@ GCP_KEY_JSON        = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 # 2. API CONNECTIONS ENGINE
 # ----------------------------------------------------------------------
 def fetch_real_apple_data(frequency, target_date):
-    """Generates secure ES256 Token and calls App Store Connect API"""
     try:
         headers = {'alg': 'ES256', 'kid': APPLE_KEY_ID, 'typ': 'JWT'}
         payload = {
@@ -39,26 +38,31 @@ def fetch_real_apple_data(frequency, target_date):
         url = "https://api.appstoreconnect.apple.com/v1/salesReports"
         req_headers = {'Authorization': f'Bearer {token}'}
         params = {
-            'filter[frequency]':      frequency,
-            'filter[reportType]':     'SALES',
-            'filter[reportSubType]':  'SUMMARY',
-            'filter[vendorNumber]':   APPLE_VENDOR_NUMBER,
-            'filter[reportDate]':     target_date
+            'filter[frequency]':     frequency,
+            'filter[reportType]':    'SALES',
+            'filter[reportSubType]': 'SUMMARY',
+            'filter[vendorNumber]':  APPLE_VENDOR_NUMBER,
+            'filter[reportDate]':    target_date
         }
 
         res = requests.get(url, headers=req_headers, params=params)
-        if res.status_code == 200:
-            decompressed = gzip.decompress(res.content).decode('utf-8')
-            df = pd.read_csv(io.StringIO(decompressed), sep='\t')
-            return int(df['Units'].sum())
-        return 0
+        print(f"  Apple API status code : {res.status_code}")
+        if res.status_code != 200:
+            print(f"  Apple API error body  : {res.text[:300]}")
+            return 0
+
+        decompressed = gzip.decompress(res.content).decode('utf-8')
+        df = pd.read_csv(io.StringIO(decompressed), sep='\t')
+        print(f"  Apple df columns      : {list(df.columns)}")
+        print(f"  Apple df row count    : {len(df)}")
+        return int(df['Units'].sum())
+
     except Exception as e:
-        print(f"Apple Store API Fetch Skipped/Failed: {e}")
+        print(f"  ❌ Apple exception: {e}")
         return 0
 
 
 def fetch_real_google_data(frequency, year_month):
-    """Authenticates with Google Cloud Storage and fetches Play Console Exports"""
     try:
         info = json.loads(GCP_KEY_JSON)
         credentials = service_account.Credentials.from_service_account_info(info)
@@ -66,15 +70,22 @@ def fetch_real_google_data(frequency, year_month):
         bucket = client.bucket(GOOGLE_BUCKET_NAME)
 
         blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}.csv"
-        blob = bucket.blob(blob_path)
+        print(f"  GCS blob path         : {blob_path}")
 
-        if blob.exists():
+        blob = bucket.blob(blob_path)
+        exists = blob.exists()
+        print(f"  GCS blob exists       : {exists}")
+
+        if exists:
             data_content = blob.download_as_text()
             df = pd.read_csv(io.StringIO(data_content))
+            print(f"  Google df columns     : {list(df.columns)}")
+            print(f"  Google df row count   : {len(df)}")
             return int(df.iloc[-1]['Total User Installs'])
         return 0
+
     except Exception as e:
-        print(f"Google Play GCS Fetch Skipped/Failed: {e}")
+        print(f"  ❌ Google exception: {e}")
         return 0
 
 
@@ -83,19 +94,46 @@ def fetch_real_google_data(frequency, year_month):
 # ----------------------------------------------------------------------
 try:
     today     = datetime.datetime.utcnow()
-    yesterday = today - datetime.timedelta(days=7)
+    yesterday = today - datetime.timedelta(days=1)
 
     target_date_str = yesterday.strftime("%Y-%m-%d")
-    # target_ym_str   = yesterday.strftime("%Y%m")
-    target_ym_str = "202605"
+    target_ym_str   = yesterday.strftime("%Y%m")
 
-    # Pull production metrics
-    ios_live_units     = fetch_real_apple_data("DAILY", target_date_str)
+    print(f"🕐 Target date for Apple  : {target_date_str}")
+    print(f"🕐 Target month for Google: {target_ym_str}")
+
+    # ── Apple ────────────────────────────────────────────────────────
+    print("\n--- APPLE FETCH START ---")
+    print(f"  APPLE_ISSUER_ID     : {'SET' if APPLE_ISSUER_ID else '❌ MISSING'}")
+    print(f"  APPLE_KEY_ID        : {'SET' if APPLE_KEY_ID else '❌ MISSING'}")
+    print(f"  APPLE_VENDOR_NUMBER : {'SET' if APPLE_VENDOR_NUMBER else '❌ MISSING'}")
+    print(f"  APPLE_PRIVATE_KEY   : {'SET (length=' + str(len(APPLE_PRIVATE_KEY)) + ')' if APPLE_PRIVATE_KEY else '❌ MISSING'}")
+
+    ios_live_units = fetch_real_apple_data("DAILY", target_date_str)
+    print(f"  ✅ Apple result: {ios_live_units}")
+
+    # ── Google ───────────────────────────────────────────────────────
+    print("\n--- GOOGLE FETCH START ---")
+    print(f"  GOOGLE_BUCKET_NAME   : {'SET' if GOOGLE_BUCKET_NAME else '❌ MISSING'}")
+    print(f"  ANDROID_PACKAGE_NAME : {'SET' if ANDROID_PACKAGE_NAME else '❌ MISSING'}")
+    print(f"  GCP_KEY_JSON         : {'SET (length=' + str(len(GCP_KEY_JSON)) + ')' if GCP_KEY_JSON else '❌ MISSING'}")
+
     android_live_units = fetch_real_google_data("monthly", target_ym_str)
+    print(f"  ✅ Google result: {android_live_units}")
 
-    # Fallback to demo values if platform exports are delayed
-    if ios_live_units == 0:     ios_live_units     = 120
-    if android_live_units == 0: android_live_units = 4500
+    # ── Fallback check ───────────────────────────────────────────────
+    print("\n--- FALLBACK CHECK ---")
+    if ios_live_units == 0:
+        print("  ⚠️  iOS returned 0 — using fallback 120")
+        ios_live_units = 120
+    else:
+        print(f"  ✅ iOS live value used: {ios_live_units}")
+
+    if android_live_units == 0:
+        print("  ⚠️  Android returned 0 — using fallback 4500")
+        android_live_units = 4500
+    else:
+        print(f"  ✅ Android live value used: {android_live_units}")
 
     # Progress bar
     GOAL           = 50000
@@ -104,7 +142,6 @@ try:
     filled         = int(round(20 * percentage))
     bar            = '█' * filled + '░' * (20 - filled)
 
-    # ── Build dashboard string (triple-backtick block closed properly) ──
     dashboard_content = f"""```text
 +-------------------------------------------------------+
 | 📱 MOBILE APPS DOWNLOAD TRACKER                       |
@@ -119,7 +156,6 @@ try:
 +-------------------------------------------------------+
 ```"""
 
-    # ── Write back to README between placeholder tags ───────────────────
     with open("README.md", "r", encoding="utf-8") as f:
         readme = f.read()
 
@@ -133,8 +169,8 @@ try:
     with open("README.md", "w", encoding="utf-8") as f:
         f.write(updated_readme)
 
-    print("✅ README canvas updated with live production data.")
+    print("\n✅ README canvas updated with live production data.")
 
 except Exception as main_err:
-    print(f"❌ Pipeline failure: {main_err}")
+    print(f"\n❌ Pipeline failure: {main_err}")
     raise
