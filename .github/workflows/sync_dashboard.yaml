@@ -29,7 +29,9 @@ jobs:
         run: |
           git config --global user.name 'Stats-Dashboard-Bot'
           git config --global user.email 'dashboard-bot@github.com'
-          git pull --rebase origin main
           git add README.md
+          git stash
+          git pull --rebase origin main
+          git stash pop
           git diff-index --quiet HEAD || git commit -m "docs: sync download statistics [skip ci]"
           git push
