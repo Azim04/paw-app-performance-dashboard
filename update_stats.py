@@ -129,22 +129,32 @@ def fetch_real_google_data(year_month):
         client      = storage.Client(credentials=credentials)
         bucket      = client.bucket(GOOGLE_BUCKET_NAME)
 
-        blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}.csv"
-        print(f"  GCS blob path     : {blob_path}")
+        # ── LIST ALL FILES IN BUCKET ──────────────────────────────────
+        print(f"  Listing all files in bucket: {GOOGLE_BUCKET_NAME}")
+        all_blobs = list(client.list_blobs(GOOGLE_BUCKET_NAME))
+        if not all_blobs:
+            print("  ❌ Bucket is completely EMPTY or service account cannot list blobs")
+        else:
+            print(f"  Total files found in bucket: {len(all_blobs)}")
+            print(f"  All file paths:")
+            for blob in all_blobs:
+                print(f"    → {blob.name}")
+        # ─────────────────────────────────────────────────────────────
 
+        blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}.csv"
+        print(f"\n  Attempting exact path : {blob_path}")
         blob   = bucket.blob(blob_path)
         exists = blob.exists()
-        print(f"  GCS blob exists   : {exists}")
+        print(f"  Exists                : {exists}")
 
         if not exists:
-            # Try previous month in case current month not yet exported
-            prev        = datetime.datetime.utcnow().replace(day=1) - datetime.timedelta(days=1)
-            prev_ym     = prev.strftime("%Y%m")
-            blob_path   = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{prev_ym}.csv"
-            print(f"  Trying prev month : {blob_path}")
+            prev      = datetime.datetime.utcnow().replace(day=1) - datetime.timedelta(days=1)
+            prev_ym   = prev.strftime("%Y%m")
+            blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{prev_ym}.csv"
+            print(f"\n  Trying prev month     : {blob_path}")
             blob   = bucket.blob(blob_path)
             exists = blob.exists()
-            print(f"  Prev month exists : {exists}")
+            print(f"  Exists                : {exists}")
 
         if exists:
             data_content = blob.download_as_text()
@@ -159,8 +169,10 @@ def fetch_real_google_data(year_month):
 
     except Exception as e:
         print(f"  ❌ Google exception: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
-
+        
 # ----------------------------------------------------------------------
 # 3. CORE PROCESSING PIPELINE
 # ----------------------------------------------------------------------
