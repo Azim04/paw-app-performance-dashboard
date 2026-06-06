@@ -22,28 +22,11 @@ GOOGLE_BUCKET_NAME  = os.getenv("GOOGLE_BUCKET_NAME")
 ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME")
 GCP_KEY_JSON        = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 
+APPLE_HISTORICAL_BASELINE = 1092
+
 # ----------------------------------------------------------------------
 # 2. API CONNECTIONS ENGINE
 # ----------------------------------------------------------------------
-def fetch_apple_cumulative(start_year=2024):
-    """Fetch and sum all monthly reports since app launch"""
-    total = 0
-    today = datetime.datetime.utcnow()
-    year  = start_year
-    month = 1
-
-    while (year, month) <= (today.year, today.month):
-        date_str = f"{year}-{month:02d}"
-        units    = fetch_real_apple_data("MONTHLY", date_str)
-        print(f"  Apple {date_str}: {units} units")
-        total   += units
-        month   += 1
-        if month > 12:
-            month = 1
-            year += 1
-
-    return total
-    
 def fetch_real_apple_data(frequency, target_date):
     try:
         headers = {'alg': 'ES256', 'kid': APPLE_KEY_ID, 'typ': 'JWT'}
@@ -58,7 +41,7 @@ def fetch_real_apple_data(frequency, target_date):
         req_headers = {'Authorization': f'Bearer {token}'}
         params = {
             'filter[frequency]':     frequency,
-            'filter[reportType]':    'INSTALLS',      # ← changed from SALES
+            'filter[reportType]':    'INSTALLS',
             'filter[reportSubType]': 'SUMMARY',
             'filter[vendorNumber]':  APPLE_VENDOR_NUMBER,
             'filter[reportDate]':    target_date
@@ -66,26 +49,60 @@ def fetch_real_apple_data(frequency, target_date):
 
         res = requests.get(url, headers=req_headers, params=params)
         print(f"  Apple API status code : {res.status_code}")
+
+        if res.status_code == 410:
+            # Report expired — skip silently, handled by baseline
+            return 0
+        if res.status_code == 404:
+            # No sales that month — legitimate zero
+            return 0
         if res.status_code != 200:
             print(f"  Apple API error body  : {res.text[:300]}")
             return 0
 
         decompressed = gzip.decompress(res.content).decode('utf-8')
-        df = pd.read_csv(io.StringIO(decompressed), sep='\t')
+        df = pd.read_csv(io.StringIO(decompressed), sep='\t')  # ← fix: tab separated
         print(f"  Apple df columns      : {list(df.columns)}")
         print(f"  Apple df row count    : {len(df)}")
 
-        # INSTALLS report uses 'Installs' column, not 'Units'
         if 'Installs' in df.columns:
-            return int(df['Installs'].sum())        # ← changed from df['Units']
+            return int(df['Installs'].sum())
         else:
-            print(f"  ⚠️ 'Installs' column not found, available: {list(df.columns)}")
+            print(f"  ⚠️ 'Installs' column not found, columns: {list(df.columns)}")
             return 0
 
     except Exception as e:
         print(f"  ❌ Apple exception: {e}")
         return 0
 
+
+def fetch_apple_cumulative(start_year=2024):
+    """
+    Fetches last 13 months from Apple API (retention limit)
+    and adds the manually seeded historical baseline for older data.
+    """
+    api_total = 0
+    today     = datetime.datetime.utcnow()
+
+    # Only fetch months within Apple's 13-month retention window
+    cutoff = today - datetime.timedelta(days=395)  # ~13 months
+
+    year  = cutoff.year
+    month = cutoff.month
+
+    while (year, month) <= (today.year, today.month):
+        date_str = f"{year}-{month:02d}"
+        units    = fetch_real_apple_data("MONTHLY", date_str)
+        print(f"  Apple {date_str}: {units} installs")
+        api_total += units
+        month     += 1
+        if month > 12:
+            month = 1
+            year += 1
+
+    cumulative = APPLE_HISTORICAL_BASELINE + api_total
+    print(f"  📊 Baseline: {APPLE_HISTORICAL_BASELINE} + API last 13 months: {api_total} = {cumulative}")
+    return cumulative
 
 def fetch_real_google_data(frequency, year_month):
     try:
