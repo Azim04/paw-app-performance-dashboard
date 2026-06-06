@@ -41,9 +41,9 @@ def fetch_google_cumulative():
             try:
                 content = blob.download_as_text()
                 df      = pd.read_csv(io.StringIO(content))
-                if 'Install events' in df.columns:
+                if 'Daily User Installs' in df.columns:
                     month_installs = pd.to_numeric(
-                        df['Install events'], errors='coerce'
+                        df['Daily User Installs'], errors='coerce'
                     ).fillna(0).sum()
                     print(f"  {blob.name.split('_')[-2]}: {int(month_installs)} installs")
                     total_installs += int(month_installs)
