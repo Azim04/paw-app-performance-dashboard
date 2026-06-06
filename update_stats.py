@@ -61,6 +61,7 @@ def fetch_real_apple_data(frequency, target_date):
             return 0
 
         decompressed = gzip.decompress(res.content).decode('utf-8')
+        print(f"  Apple raw response (first 500 chars):\n{decompressed[:500]}")
         df = pd.read_csv(io.StringIO(decompressed), sep='\t')  # ← fix: tab separated
         print(f"  Apple df columns      : {list(df.columns)}")
         print(f"  Apple df row count    : {len(df)}")
