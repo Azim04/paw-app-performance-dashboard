@@ -23,6 +23,8 @@ ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME")
 GCP_KEY_JSON        = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 
 APPLE_HISTORICAL_BASELINE = 1092
+IOS_TOTAL_DOWNLOADS = 2775
+
 
 # ----------------------------------------------------------------------
 # 2. API CONNECTIONS ENGINE
@@ -120,55 +122,54 @@ def fetch_apple_cumulative(start_year=2024):
     print(f"  📊 Baseline: {APPLE_HISTORICAL_BASELINE} + API last 13 months: {api_total} = {cumulative}")
     return cumulative
 
-def fetch_real_google_data(frequency, year_month):
+def fetch_real_google_data(year_month):
     try:
-        info = json.loads(GCP_KEY_JSON)
+        info        = json.loads(GCP_KEY_JSON)
         credentials = service_account.Credentials.from_service_account_info(info)
-        client = storage.Client(credentials=credentials)
-        bucket = client.bucket(GOOGLE_BUCKET_NAME)
+        client      = storage.Client(credentials=credentials)
+        bucket      = client.bucket(GOOGLE_BUCKET_NAME)
 
         blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}.csv"
-        print(f"  GCS blob path         : {blob_path}")
+        print(f"  GCS blob path     : {blob_path}")
 
-        blob = bucket.blob(blob_path)
+        blob   = bucket.blob(blob_path)
         exists = blob.exists()
-        print(f"  GCS blob exists       : {exists}")
+        print(f"  GCS blob exists   : {exists}")
+
+        if not exists:
+            # Try previous month in case current month not yet exported
+            prev        = datetime.datetime.utcnow().replace(day=1) - datetime.timedelta(days=1)
+            prev_ym     = prev.strftime("%Y%m")
+            blob_path   = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{prev_ym}.csv"
+            print(f"  Trying prev month : {blob_path}")
+            blob   = bucket.blob(blob_path)
+            exists = blob.exists()
+            print(f"  Prev month exists : {exists}")
 
         if exists:
             data_content = blob.download_as_text()
             df = pd.read_csv(io.StringIO(data_content))
-            print(f"  Google df columns     : {list(df.columns)}")
-            print(f"  Google df row count   : {len(df)}")
+            print(f"  Google df columns : {list(df.columns)}")
+            print(f"  Google df rows    : {len(df)}")
+            print(f"  Google last row   :\n{df.iloc[-1]}")
             return int(df.iloc[-1]['Total User Installs'])
+
+        print("  ⚠️ No blob found for current or previous month")
         return 0
 
     except Exception as e:
         print(f"  ❌ Google exception: {e}")
         return 0
 
-
 # ----------------------------------------------------------------------
 # 3. CORE PROCESSING PIPELINE
 # ----------------------------------------------------------------------
 try:
-    today     = datetime.datetime.utcnow()
-    yesterday = today - datetime.timedelta(days=1)
+    today         = datetime.datetime.utcnow()
+    target_ym_str = today.strftime("%Y%m")
 
-    target_date_str = yesterday.strftime("%Y-%m-%d")
-    target_ym_str   = yesterday.strftime("%Y%m")
-
-    print(f"🕐 Target date for Apple  : {target_date_str}")
-    print(f"🕐 Target month for Google: {target_ym_str}")
-
-    # ── Apple ────────────────────────────────────────────────────────
-    print("\n--- APPLE FETCH START ---")
-    print(f"  APPLE_ISSUER_ID     : {'SET' if APPLE_ISSUER_ID else '❌ MISSING'}")
-    print(f"  APPLE_KEY_ID        : {'SET' if APPLE_KEY_ID else '❌ MISSING'}")
-    print(f"  APPLE_VENDOR_NUMBER : {'SET' if APPLE_VENDOR_NUMBER else '❌ MISSING'}")
-    print(f"  APPLE_PRIVATE_KEY   : {'SET (length=' + str(len(APPLE_PRIVATE_KEY)) + ')' if APPLE_PRIVATE_KEY else '❌ MISSING'}")
-
-    ios_live_units = fetch_apple_cumulative(start_year=2020)
-    print(f"  ✅ Apple result: {ios_live_units}")
+    print(f"🕐 Sync Date          : {today.strftime('%Y-%m-%d')}")
+    print(f"🕐 Target month       : {target_ym_str}")
 
     # ── Google ───────────────────────────────────────────────────────
     print("\n--- GOOGLE FETCH START ---")
@@ -176,35 +177,36 @@ try:
     print(f"  ANDROID_PACKAGE_NAME : {'SET' if ANDROID_PACKAGE_NAME else '❌ MISSING'}")
     print(f"  GCP_KEY_JSON         : {'SET (length=' + str(len(GCP_KEY_JSON)) + ')' if GCP_KEY_JSON else '❌ MISSING'}")
 
-    android_live_units = fetch_real_google_data("monthly", target_ym_str)
-    print(f"  ✅ Google result: {android_live_units}")
+    android_live_units = fetch_real_google_data(target_ym_str)
+    print(f"  ✅ Google result     : {android_live_units}")
+
+    # ── Apple (manual baseline) ───────────────────────────────────────
+    print("\n--- APPLE (MANUAL) ---")
+    ios_live_units = IOS_TOTAL_DOWNLOADS
+    print(f"  ✅ iOS total (manual): {ios_live_units}")
 
     # ── Fallback check ───────────────────────────────────────────────
     print("\n--- FALLBACK CHECK ---")
-    if ios_live_units == 0:
-        print("  ⚠️  iOS returned 0 — using fallback 120")
-        ios_live_units = 120
-    else:
-        print(f"  ✅ iOS live value used: {ios_live_units}")
-
     if android_live_units == 0:
         print("  ⚠️  Android returned 0 — using fallback 4500")
         android_live_units = 4500
     else:
         print(f"  ✅ Android live value used: {android_live_units}")
 
-    # Progress bar
+    # ── Progress bar ─────────────────────────────────────────────────
     GOAL           = 50000
     combined_total = ios_live_units + android_live_units
     percentage     = min(combined_total / GOAL, 1.0)
     filled         = int(round(20 * percentage))
     bar            = '█' * filled + '░' * (20 - filled)
 
+    sync_date = today.strftime("%Y-%m-%d")
+
     dashboard_content = f"""```text
 +-------------------------------------------------------+
 | 📱 MOBILE APPS DOWNLOAD TRACKER                       |
 +-------------------------------------------------------+
-| 📊 LIVE GROWTH PERFORMANCE (Sync Date: {target_date_str}) |
+| 📊 LIVE GROWTH PERFORMANCE (Sync Date: {sync_date}) |
 +-------------------------------------------------------+
 | 🍏 iOS Cumulative App Store : {ios_live_units:,} units
 | 🤖 Android Google Play Tally: {android_live_units:,} installs
@@ -214,6 +216,7 @@ try:
 +-------------------------------------------------------+
 ```"""
 
+    # ── Write to README ───────────────────────────────────────────────
     with open("README.md", "r", encoding="utf-8") as f:
         readme = f.read()
 
@@ -232,3 +235,85 @@ try:
 except Exception as main_err:
     print(f"\n❌ Pipeline failure: {main_err}")
     raise
+# try:
+#     today     = datetime.datetime.utcnow()
+#     yesterday = today - datetime.timedelta(days=1)
+
+#     target_date_str = yesterday.strftime("%Y-%m-%d")
+#     target_ym_str   = yesterday.strftime("%Y%m")
+
+#     # print(f"🕐 Target date for Apple  : {target_date_str}")
+#     print(f"🕐 Target month for Google: {target_ym_str}")
+
+#     # # ── Apple ────────────────────────────────────────────────────────
+#     # print("\n--- APPLE FETCH START ---")
+#     # print(f"  APPLE_ISSUER_ID     : {'SET' if APPLE_ISSUER_ID else '❌ MISSING'}")
+#     # print(f"  APPLE_KEY_ID        : {'SET' if APPLE_KEY_ID else '❌ MISSING'}")
+#     # print(f"  APPLE_VENDOR_NUMBER : {'SET' if APPLE_VENDOR_NUMBER else '❌ MISSING'}")
+#     # print(f"  APPLE_PRIVATE_KEY   : {'SET (length=' + str(len(APPLE_PRIVATE_KEY)) + ')' if APPLE_PRIVATE_KEY else '❌ MISSING'}")
+
+#     # ios_live_units = fetch_apple_cumulative(start_year=2020)
+#     # print(f"  ✅ Apple result: {ios_live_units}")
+
+#     # ── Google ───────────────────────────────────────────────────────
+#     print("\n--- GOOGLE FETCH START ---")
+#     print(f"  GOOGLE_BUCKET_NAME   : {'SET' if GOOGLE_BUCKET_NAME else '❌ MISSING'}")
+#     print(f"  ANDROID_PACKAGE_NAME : {'SET' if ANDROID_PACKAGE_NAME else '❌ MISSING'}")
+#     print(f"  GCP_KEY_JSON         : {'SET (length=' + str(len(GCP_KEY_JSON)) + ')' if GCP_KEY_JSON else '❌ MISSING'}")
+
+#     android_live_units = fetch_real_google_data("monthly", target_ym_str)
+#     print(f"  ✅ Google result: {android_live_units}")
+
+#     # ── Fallback check ───────────────────────────────────────────────
+#     print("\n--- FALLBACK CHECK ---")
+#     if ios_live_units == 0:
+#         print("  ⚠️  iOS returned 0 — using fallback 120")
+#         ios_live_units = 120
+#     else:
+#         print(f"  ✅ iOS live value used: {ios_live_units}")
+
+#     if android_live_units == 0:
+#         print("  ⚠️  Android returned 0 — using fallback 4500")
+#         android_live_units = 4500
+#     else:
+#         print(f"  ✅ Android live value used: {android_live_units}")
+
+#     # Progress bar
+#     GOAL           = 50000
+#     combined_total = ios_live_units + android_live_units
+#     percentage     = min(combined_total / GOAL, 1.0)
+#     filled         = int(round(20 * percentage))
+#     bar            = '█' * filled + '░' * (20 - filled)
+
+#     dashboard_content = f"""```text
+# +-------------------------------------------------------+
+# | 📱 MOBILE APPS DOWNLOAD TRACKER                       |
+# +-------------------------------------------------------+
+# | 📊 LIVE GROWTH PERFORMANCE (Sync Date: {target_date_str}) |
+# +-------------------------------------------------------+
+# | 🍏 iOS Cumulative App Store : {ios_live_units:,} units
+# | 🤖 Android Google Play Tally: {android_live_units:,} installs
+# |
+# | 🏆 GOAL MILESTONE           : {combined_total:,} / {GOAL:,}
+# | Milestone Progress         : [{bar}] {int(percentage * 100)}%
+# +-------------------------------------------------------+
+# ```"""
+
+#     with open("README.md", "r", encoding="utf-8") as f:
+#         readme = f.read()
+
+#     updated_readme = re.sub(
+#         r'<!--START_DASHBOARD-->.*?<!--END_DASHBOARD-->',
+#         f'<!--START_DASHBOARD-->\n{dashboard_content}\n<!--END_DASHBOARD-->',
+#         readme,
+#         flags=re.DOTALL
+#     )
+
+#     with open("README.md", "w", encoding="utf-8") as f:
+#         f.write(updated_readme)
+
+#     print("\n✅ README canvas updated with live production data.")
+
+# except Exception as main_err:
+#     print(f"\n❌ Pipeline failure: {main_err}")
+#     raise
