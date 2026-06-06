@@ -58,7 +58,7 @@ def fetch_real_apple_data(frequency, target_date):
         req_headers = {'Authorization': f'Bearer {token}'}
         params = {
             'filter[frequency]':     frequency,
-            'filter[reportType]':    'SALES',
+            'filter[reportType]':    'INSTALLS',      # ← changed from SALES
             'filter[reportSubType]': 'SUMMARY',
             'filter[vendorNumber]':  APPLE_VENDOR_NUMBER,
             'filter[reportDate]':    target_date
@@ -74,7 +74,13 @@ def fetch_real_apple_data(frequency, target_date):
         df = pd.read_csv(io.StringIO(decompressed), sep='\t')
         print(f"  Apple df columns      : {list(df.columns)}")
         print(f"  Apple df row count    : {len(df)}")
-        return int(df['Units'].sum())
+
+        # INSTALLS report uses 'Installs' column, not 'Units'
+        if 'Installs' in df.columns:
+            return int(df['Installs'].sum())        # ← changed from df['Units']
+        else:
+            print(f"  ⚠️ 'Installs' column not found, available: {list(df.columns)}")
+            return 0
 
     except Exception as e:
         print(f"  ❌ Apple exception: {e}")
