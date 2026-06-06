@@ -51,31 +51,46 @@ def fetch_real_apple_data(frequency, target_date):
         print(f"  Apple API status code : {res.status_code}")
 
         if res.status_code == 410:
-            # Report expired — skip silently, handled by baseline
             return 0
         if res.status_code == 404:
-            # No sales that month — legitimate zero
             return 0
         if res.status_code != 200:
             print(f"  Apple API error body  : {res.text[:300]}")
             return 0
 
         decompressed = gzip.decompress(res.content).decode('utf-8')
-        print(f"  Apple raw response (first 500 chars):\n{decompressed[:500]}")
-        df = pd.read_csv(io.StringIO(decompressed), sep='\t')  # ← fix: tab separated
+        lines = decompressed.split('\n')
+
+        # Find the real header row — it starts with 'Developer'
+        header_row_index = None
+        for i, line in enumerate(lines):
+            if line.startswith('Developer\t'):
+                header_row_index = i
+                break
+
+        if header_row_index is None:
+            print(f"  ⚠️ Could not find header row in Apple response")
+            return 0
+
+        # Skip metadata rows and the description row below the header
+        # Structure: [header_row, description_row, data_row_1, data_row_2, ...]
+        clean_lines = [lines[header_row_index]] + lines[header_row_index + 2:]
+        clean_csv   = '\n'.join(clean_lines)
+
+        df = pd.read_csv(io.StringIO(clean_csv), sep='\t')
         print(f"  Apple df columns      : {list(df.columns)}")
         print(f"  Apple df row count    : {len(df)}")
 
-        if 'Installs' in df.columns:
-            return int(df['Installs'].sum())
+        if 'First Annual Installs' in df.columns:
+            total = pd.to_numeric(df['First Annual Installs'], errors='coerce').fillna(0).sum()
+            return int(total)
         else:
-            print(f"  ⚠️ 'Installs' column not found, columns: {list(df.columns)}")
+            print(f"  ⚠️ Expected column not found. Columns: {list(df.columns)}")
             return 0
 
     except Exception as e:
         print(f"  ❌ Apple exception: {e}")
         return 0
-
 
 def fetch_apple_cumulative(start_year=2024):
     """
