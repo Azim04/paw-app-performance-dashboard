@@ -20,6 +20,45 @@ IOS_TOTAL_DOWNLOADS  = 2775
 # ----------------------------------------------------------------------
 # 2. GOOGLE FETCH ENGINE
 # ----------------------------------------------------------------------
+
+def fetch_google_cumulative():
+    try:
+        info        = json.loads(GCP_KEY_JSON)
+        credentials = service_account.Credentials.from_service_account_info(info)
+        client      = storage.Client(credentials=credentials)
+        bucket      = client.bucket(GOOGLE_BUCKET_NAME)
+
+        # List all overview files for this package
+        prefix    = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_"
+        all_blobs = list(client.list_blobs(GOOGLE_BUCKET_NAME, prefix=prefix))
+        
+        # Filter to only _overview files
+        overview_blobs = [b for b in all_blobs if b.name.endswith('_overview.csv')]
+        print(f"  Found {len(overview_blobs)} monthly overview files")
+
+        total_installs = 0
+        for blob in sorted(overview_blobs, key=lambda b: b.name):
+            try:
+                content = blob.download_as_text()
+                df      = pd.read_csv(io.StringIO(content))
+                if 'Install events' in df.columns:
+                    month_installs = pd.to_numeric(
+                        df['Install events'], errors='coerce'
+                    ).fillna(0).sum()
+                    print(f"  {blob.name.split('_')[-2]}: {int(month_installs)} installs")
+                    total_installs += int(month_installs)
+            except Exception as e:
+                print(f"  ⚠️ Skipped {blob.name}: {e}")
+
+        print(f"  📊 Grand total installs: {total_installs}")
+        return total_installs
+
+    except Exception as e:
+        print(f"  ❌ Google cumulative exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+        
 def fetch_real_google_data(year_month):
     try:
         info        = json.loads(GCP_KEY_JSON)
@@ -84,7 +123,7 @@ try:
     print(f"  ANDROID_PACKAGE_NAME : {'SET' if ANDROID_PACKAGE_NAME else '❌ MISSING'}")
     print(f"  GCP_KEY_JSON         : {'SET (length=' + str(len(GCP_KEY_JSON)) + ')' if GCP_KEY_JSON else '❌ MISSING'}")
 
-    android_live_units = fetch_real_google_data(target_ym_str)
+    android_live_units = fetch_google_cumulative()
     print(f"  ✅ Google result     : {android_live_units}")
 
     # ── Apple (manual) ────────────────────────────────────────────────
