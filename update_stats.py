@@ -1,127 +1,25 @@
 import os
 import re
-import jwt
-import time
-import gzip
-import io
 import json
 import datetime
-import requests
+import io
 import pandas as pd
 from google.oauth2 import service_account
 from google.cloud import storage
 
 # ----------------------------------------------------------------------
-# 1. READ ENCRYPTED ENV ENVIRONMENT VARIABLES
+# 1. ENVIRONMENT VARIABLES
 # ----------------------------------------------------------------------
-APPLE_ISSUER_ID     = os.getenv("APPLE_ISSUER_ID")
-APPLE_KEY_ID        = os.getenv("APPLE_KEY_ID")
-APPLE_PRIVATE_KEY   = os.getenv("APPLE_PRIVATE_KEY", "").replace("\\n", "\n")
-APPLE_VENDOR_NUMBER = os.getenv("APPLE_VENDOR_NUMBER")
-GOOGLE_BUCKET_NAME  = os.getenv("GOOGLE_BUCKET_NAME")
-ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME")
-GCP_KEY_JSON        = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
+GOOGLE_BUCKET_NAME   = os.getenv("GOOGLE_BUCKET_NAME")   # pubsite_prod_5000038799006733268
+ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME") # com.wedding.planner
+GCP_KEY_JSON         = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 
-APPLE_HISTORICAL_BASELINE = 1092
-IOS_TOTAL_DOWNLOADS = 2775
-
+# iOS — update this number monthly from App Store Connect → Trends → Sales
+IOS_TOTAL_DOWNLOADS  = 2775
 
 # ----------------------------------------------------------------------
-# 2. API CONNECTIONS ENGINE
+# 2. GOOGLE FETCH ENGINE
 # ----------------------------------------------------------------------
-def fetch_real_apple_data(frequency, target_date):
-    try:
-        headers = {'alg': 'ES256', 'kid': APPLE_KEY_ID, 'typ': 'JWT'}
-        payload = {
-            'iss': APPLE_ISSUER_ID,
-            'exp': int(time.time()) + 900,
-            'aud': 'appstoreconnect-v1'
-        }
-        token = jwt.encode(payload, APPLE_PRIVATE_KEY, algorithm='ES256', headers=headers)
-
-        url = "https://api.appstoreconnect.apple.com/v1/salesReports"
-        req_headers = {'Authorization': f'Bearer {token}'}
-        params = {
-            'filter[frequency]':     frequency,
-            'filter[reportType]':    'INSTALLS',
-            'filter[reportSubType]': 'SUMMARY',
-            'filter[vendorNumber]':  APPLE_VENDOR_NUMBER,
-            'filter[reportDate]':    target_date
-        }
-
-        res = requests.get(url, headers=req_headers, params=params)
-        print(f"  Apple API status code : {res.status_code}")
-
-        if res.status_code == 410:
-            return 0
-        if res.status_code == 404:
-            return 0
-        if res.status_code != 200:
-            print(f"  Apple API error body  : {res.text[:300]}")
-            return 0
-
-        decompressed = gzip.decompress(res.content).decode('utf-8')
-        lines = decompressed.split('\n')
-
-        # Find the real header row — it starts with 'Developer'
-        header_row_index = None
-        for i, line in enumerate(lines):
-            if line.startswith('Developer\t'):
-                header_row_index = i
-                break
-
-        if header_row_index is None:
-            print(f"  ⚠️ Could not find header row in Apple response")
-            return 0
-
-        # Skip metadata rows and the description row below the header
-        # Structure: [header_row, description_row, data_row_1, data_row_2, ...]
-        clean_lines = [lines[header_row_index]] + lines[header_row_index + 2:]
-        clean_csv   = '\n'.join(clean_lines)
-
-        df = pd.read_csv(io.StringIO(clean_csv), sep='\t')
-        print(f"  Apple df columns      : {list(df.columns)}")
-        print(f"  Apple df row count    : {len(df)}")
-
-        if 'First Annual Installs' in df.columns:
-            total = pd.to_numeric(df['First Annual Installs'], errors='coerce').fillna(0).sum()
-            return int(total)
-        else:
-            print(f"  ⚠️ Expected column not found. Columns: {list(df.columns)}")
-            return 0
-
-    except Exception as e:
-        print(f"  ❌ Apple exception: {e}")
-        return 0
-
-def fetch_apple_cumulative(start_year=2024):
-    """
-    Fetches last 13 months from Apple API (retention limit)
-    and adds the manually seeded historical baseline for older data.
-    """
-    api_total = 0
-    today     = datetime.datetime.utcnow()
-
-    # Only fetch months within Apple's 13-month retention window
-    cutoff = today - datetime.timedelta(days=395)  # ~13 months
-
-    year  = cutoff.year
-    month = cutoff.month
-
-    while (year, month) <= (today.year, today.month):
-        date_str = f"{year}-{month:02d}"
-        units    = fetch_real_apple_data("MONTHLY", date_str)
-        print(f"  Apple {date_str}: {units} installs")
-        api_total += units
-        month     += 1
-        if month > 12:
-            month = 1
-            year += 1
-
-    cumulative = APPLE_HISTORICAL_BASELINE + api_total
-    print(f"  📊 Baseline: {APPLE_HISTORICAL_BASELINE} + API last 13 months: {api_total} = {cumulative}")
-    return cumulative
-
 def fetch_real_google_data(year_month):
     try:
         info        = json.loads(GCP_KEY_JSON)
@@ -129,40 +27,35 @@ def fetch_real_google_data(year_month):
         client      = storage.Client(credentials=credentials)
         bucket      = client.bucket(GOOGLE_BUCKET_NAME)
 
-        # ── LIST ALL FILES IN BUCKET ──────────────────────────────────
-        print(f"  Listing all files in bucket: {GOOGLE_BUCKET_NAME}")
-        all_blobs = list(client.list_blobs(GOOGLE_BUCKET_NAME))
-        if not all_blobs:
-            print("  ❌ Bucket is completely EMPTY or service account cannot list blobs")
-        else:
-            print(f"  Total files found in bucket: {len(all_blobs)}")
-            print(f"  All file paths:")
-            for blob in all_blobs:
-                print(f"    → {blob.name}")
-        # ─────────────────────────────────────────────────────────────
-
-        blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}.csv"
-        print(f"\n  Attempting exact path : {blob_path}")
+        blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{year_month}_overview.csv"
+        print(f"  Attempting path   : {blob_path}")
         blob   = bucket.blob(blob_path)
         exists = blob.exists()
-        print(f"  Exists                : {exists}")
+        print(f"  Exists            : {exists}")
 
         if not exists:
             prev      = datetime.datetime.utcnow().replace(day=1) - datetime.timedelta(days=1)
             prev_ym   = prev.strftime("%Y%m")
-            blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{prev_ym}.csv"
-            print(f"\n  Trying prev month     : {blob_path}")
+            blob_path = f"stats/installs/installs_{ANDROID_PACKAGE_NAME}_{prev_ym}_overview.csv"
+            print(f"  Trying prev month : {blob_path}")
             blob   = bucket.blob(blob_path)
             exists = blob.exists()
-            print(f"  Exists                : {exists}")
+            print(f"  Exists            : {exists}")
 
         if exists:
             data_content = blob.download_as_text()
             df = pd.read_csv(io.StringIO(data_content))
-            print(f"  Google df columns : {list(df.columns)}")
-            print(f"  Google df rows    : {len(df)}")
-            print(f"  Google last row   :\n{df.iloc[-1]}")
-            return int(df.iloc[-1]['Total User Installs'])
+            print(f"  Columns           : {list(df.columns)}")
+            print(f"  Rows              : {len(df)}")
+            print(f"  Full content      :\n{df.to_string()}")
+
+            # Extract total installs from last row
+            if 'Total User Installs' in df.columns:
+                total = pd.to_numeric(df['Total User Installs'], errors='coerce').fillna(0).iloc[-1]
+                return int(total)
+            else:
+                print(f"  ⚠️ 'Total User Installs' not found. Columns: {list(df.columns)}")
+                return 0
 
         print("  ⚠️ No blob found for current or previous month")
         return 0
@@ -172,16 +65,18 @@ def fetch_real_google_data(year_month):
         import traceback
         traceback.print_exc()
         return 0
-        
+
+
 # ----------------------------------------------------------------------
 # 3. CORE PROCESSING PIPELINE
 # ----------------------------------------------------------------------
 try:
     today         = datetime.datetime.utcnow()
     target_ym_str = today.strftime("%Y%m")
+    sync_date     = today.strftime("%Y-%m-%d")
 
-    print(f"🕐 Sync Date          : {today.strftime('%Y-%m-%d')}")
-    print(f"🕐 Target month       : {target_ym_str}")
+    print(f"🕐 Sync Date    : {sync_date}")
+    print(f"🕐 Target month : {target_ym_str}")
 
     # ── Google ───────────────────────────────────────────────────────
     print("\n--- GOOGLE FETCH START ---")
@@ -192,7 +87,7 @@ try:
     android_live_units = fetch_real_google_data(target_ym_str)
     print(f"  ✅ Google result     : {android_live_units}")
 
-    # ── Apple (manual baseline) ───────────────────────────────────────
+    # ── Apple (manual) ────────────────────────────────────────────────
     print("\n--- APPLE (MANUAL) ---")
     ios_live_units = IOS_TOTAL_DOWNLOADS
     print(f"  ✅ iOS total (manual): {ios_live_units}")
@@ -200,10 +95,10 @@ try:
     # ── Fallback check ───────────────────────────────────────────────
     print("\n--- FALLBACK CHECK ---")
     if android_live_units == 0:
-        print("  ⚠️  Android returned 0 — using fallback 4500")
-        android_live_units = 4500
+        print("  ⚠️ Android returned 0 — check logs above for root cause")
+        android_live_units = 0  # show real zero, no fake fallback
     else:
-        print(f"  ✅ Android live value used: {android_live_units}")
+        print(f"  ✅ Android live value: {android_live_units}")
 
     # ── Progress bar ─────────────────────────────────────────────────
     GOAL           = 50000
@@ -212,8 +107,7 @@ try:
     filled         = int(round(20 * percentage))
     bar            = '█' * filled + '░' * (20 - filled)
 
-    sync_date = today.strftime("%Y-%m-%d")
-
+    # ── Build dashboard ───────────────────────────────────────────────
     dashboard_content = f"""```text
 +-------------------------------------------------------+
 | 📱 MOBILE APPS DOWNLOAD TRACKER                       |
@@ -242,90 +136,8 @@ try:
     with open("README.md", "w", encoding="utf-8") as f:
         f.write(updated_readme)
 
-    print("\n✅ README canvas updated with live production data.")
+    print("\n✅ README updated successfully.")
 
 except Exception as main_err:
     print(f"\n❌ Pipeline failure: {main_err}")
     raise
-# try:
-#     today     = datetime.datetime.utcnow()
-#     yesterday = today - datetime.timedelta(days=1)
-
-#     target_date_str = yesterday.strftime("%Y-%m-%d")
-#     target_ym_str   = yesterday.strftime("%Y%m")
-
-#     # print(f"🕐 Target date for Apple  : {target_date_str}")
-#     print(f"🕐 Target month for Google: {target_ym_str}")
-
-#     # # ── Apple ────────────────────────────────────────────────────────
-#     # print("\n--- APPLE FETCH START ---")
-#     # print(f"  APPLE_ISSUER_ID     : {'SET' if APPLE_ISSUER_ID else '❌ MISSING'}")
-#     # print(f"  APPLE_KEY_ID        : {'SET' if APPLE_KEY_ID else '❌ MISSING'}")
-#     # print(f"  APPLE_VENDOR_NUMBER : {'SET' if APPLE_VENDOR_NUMBER else '❌ MISSING'}")
-#     # print(f"  APPLE_PRIVATE_KEY   : {'SET (length=' + str(len(APPLE_PRIVATE_KEY)) + ')' if APPLE_PRIVATE_KEY else '❌ MISSING'}")
-
-#     # ios_live_units = fetch_apple_cumulative(start_year=2020)
-#     # print(f"  ✅ Apple result: {ios_live_units}")
-
-#     # ── Google ───────────────────────────────────────────────────────
-#     print("\n--- GOOGLE FETCH START ---")
-#     print(f"  GOOGLE_BUCKET_NAME   : {'SET' if GOOGLE_BUCKET_NAME else '❌ MISSING'}")
-#     print(f"  ANDROID_PACKAGE_NAME : {'SET' if ANDROID_PACKAGE_NAME else '❌ MISSING'}")
-#     print(f"  GCP_KEY_JSON         : {'SET (length=' + str(len(GCP_KEY_JSON)) + ')' if GCP_KEY_JSON else '❌ MISSING'}")
-
-#     android_live_units = fetch_real_google_data("monthly", target_ym_str)
-#     print(f"  ✅ Google result: {android_live_units}")
-
-#     # ── Fallback check ───────────────────────────────────────────────
-#     print("\n--- FALLBACK CHECK ---")
-#     if ios_live_units == 0:
-#         print("  ⚠️  iOS returned 0 — using fallback 120")
-#         ios_live_units = 120
-#     else:
-#         print(f"  ✅ iOS live value used: {ios_live_units}")
-
-#     if android_live_units == 0:
-#         print("  ⚠️  Android returned 0 — using fallback 4500")
-#         android_live_units = 4500
-#     else:
-#         print(f"  ✅ Android live value used: {android_live_units}")
-
-#     # Progress bar
-#     GOAL           = 50000
-#     combined_total = ios_live_units + android_live_units
-#     percentage     = min(combined_total / GOAL, 1.0)
-#     filled         = int(round(20 * percentage))
-#     bar            = '█' * filled + '░' * (20 - filled)
-
-#     dashboard_content = f"""```text
-# +-------------------------------------------------------+
-# | 📱 MOBILE APPS DOWNLOAD TRACKER                       |
-# +-------------------------------------------------------+
-# | 📊 LIVE GROWTH PERFORMANCE (Sync Date: {target_date_str}) |
-# +-------------------------------------------------------+
-# | 🍏 iOS Cumulative App Store : {ios_live_units:,} units
-# | 🤖 Android Google Play Tally: {android_live_units:,} installs
-# |
-# | 🏆 GOAL MILESTONE           : {combined_total:,} / {GOAL:,}
-# | Milestone Progress         : [{bar}] {int(percentage * 100)}%
-# +-------------------------------------------------------+
-# ```"""
-
-#     with open("README.md", "r", encoding="utf-8") as f:
-#         readme = f.read()
-
-#     updated_readme = re.sub(
-#         r'<!--START_DASHBOARD-->.*?<!--END_DASHBOARD-->',
-#         f'<!--START_DASHBOARD-->\n{dashboard_content}\n<!--END_DASHBOARD-->',
-#         readme,
-#         flags=re.DOTALL
-#     )
-
-#     with open("README.md", "w", encoding="utf-8") as f:
-#         f.write(updated_readme)
-
-#     print("\n✅ README canvas updated with live production data.")
-
-# except Exception as main_err:
-#     print(f"\n❌ Pipeline failure: {main_err}")
-#     raise
