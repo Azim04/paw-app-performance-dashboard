@@ -20,6 +20,8 @@ SPREADSHEET_ID       = "1ydkkBv6DKesQDu-xUHrbq-W_-jk-dskdpNVz1f-9-G0"
 # 2. GOOGLE FETCH ENGINE
 # ----------------------------------------------------------------------
 def get_gcp_credentials():
+    if not GCP_KEY_JSON:
+        raise ValueError("❌ Critical Error: The environment variable 'GCP_SERVICE_ACCOUNT_KEY' is completely empty or missing from the GitHub runner environment.")
     info = json.loads(GCP_KEY_JSON)
     return service_account.Credentials.from_service_account_info(
         info,
