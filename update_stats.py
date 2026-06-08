@@ -131,7 +131,7 @@ try:
     sync_date = today.strftime("%Y-%m-%d")
     run_mode  = os.getenv("RUN_MODE", "weekly")
 
-    print(f"🕐 Sync Date : {sync_date}")
+    print(f"1️⃣ Sync Date : {sync_date}")
     print(f"🚀 Run Mode  : {run_mode}")
 
     # ── Fetch Android data ────────────────────────────────────────────
@@ -154,11 +154,11 @@ try:
         print(f"  📅 Monthly row written for {month_label}")
 
     elif run_mode == "weekly":
-        week_label = today.strftime("%Y-%m-%d")
+        # Changed format from "%Y-%m-%d" to "%d/%m/%Y" (DD/MM/YYYY)
+        week_label = today.strftime("%d/%m/%Y")
         
-        # Changed here: Now sending the cumulative metric to the weekly row data dict
         payload = {
-            "Date": week_label,
+            "Week_Date": week_label,  # Matches your specified layout token name
             "Android_Weekly": android_cumulative 
         }
         write_to_sheet_by_headers("Weekly_Stats", payload)
