@@ -23,8 +23,8 @@ APPS_CONFIG = [
     {
         "name": "Original App",
         "package_name": DEFAULT_PACKAGE_NAME,
-        "monthly_sheet": "Monthly_Stats",
-        "weekly_sheet": "Weekly_Stats"
+        "monthly_sheet": "Business_Monthly",
+        "weekly_sheet": "Business_Weekly"
     },
     {
         "name": "Couple App",
