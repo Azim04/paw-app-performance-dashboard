@@ -114,7 +114,6 @@ def write_to_sheet_by_headers(sheet_name, data_dict):
         # Build out a row matched perfectly to the sheet's columns
         row_to_append = []
         for header in headers:
-            # Map values from data_dict if header matches, otherwise keep cell blank
             row_to_append.append(data_dict.get(header, ""))
             
         worksheet.append_row(row_to_append, value_input_option='USER_ENTERED')
@@ -132,7 +131,7 @@ try:
     sync_date = today.strftime("%Y-%m-%d")
     run_mode  = os.getenv("RUN_MODE", "weekly")
 
-    print(f"1️⃣ Sync Date : {sync_date}")
+    print(f"🕐 Sync Date : {sync_date}")
     print(f"🚀 Run Mode  : {run_mode}")
 
     # ── Fetch Android data ────────────────────────────────────────────
@@ -147,7 +146,6 @@ try:
     if run_mode == "monthly":
         month_label = today.strftime("%B %Y")
         
-        # Maps keys directly to your Google Sheet column headers
         payload = {
             "Date": month_label,
             "Android_Cumulative": android_cumulative
@@ -158,10 +156,10 @@ try:
     elif run_mode == "weekly":
         week_label = today.strftime("%Y-%m-%d")
         
-        # Maps keys directly to your Google Sheet column headers
+        # Changed here: Now sending the cumulative metric to the weekly row data dict
         payload = {
             "Date": week_label,
-            "Android_Weekly": android_weekly
+            "Android_Weekly": android_cumulative 
         }
         write_to_sheet_by_headers("Weekly_Stats", payload)
         print(f"  📅 Weekly row written for {week_label}")
