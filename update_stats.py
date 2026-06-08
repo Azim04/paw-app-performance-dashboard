@@ -1,6 +1,3 @@
-Here is your updated script with the iOS logic completely commented out, the environment variable fallback fixed, and the Google Sheets exception handling corrected so your logs remain accurate.
-
-```python
 import os
 import re
 import json
@@ -193,5 +190,3 @@ try:
 except Exception as main_err:
     print(f"\n❌ Pipeline failure: {main_err}")
     raise
-
-```
