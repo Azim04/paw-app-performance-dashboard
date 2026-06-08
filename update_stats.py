@@ -58,7 +58,6 @@ def fetch_google_cumulative():
         for col, val in running_totals.items():
             print(f"     {col}: {val:,}")
 
-        # Use Daily User Installs as the most accurate cumulative
         return running_totals.get('Daily User Installs', 0)
 
     except Exception as e:
@@ -101,18 +100,28 @@ def fetch_google_weekly():
         return 0
 
 
-def write_to_sheet(sheet_name, row_data):
-    """Append a row to the specified Google Sheet tab"""
+def write_to_sheet_by_headers(sheet_name, data_dict):
+    """Appends a row to the sheet mapping dictionary keys straight to the column headers"""
     try:
         credentials = get_gcp_credentials()
         gc          = gspread.authorize(credentials)
         sh          = gc.open_by_key(SPREADSHEET_ID)
         worksheet   = sh.worksheet(sheet_name)
-        worksheet.append_row(row_data, value_input_option='USER_ENTERED')
-        print(f"  ✅ Written to {sheet_name}: {row_data}")
+        
+        # Read the top row of headers from the sheet
+        headers = worksheet.row_values(1)
+        
+        # Build out a row matched perfectly to the sheet's columns
+        row_to_append = []
+        for header in headers:
+            # Map values from data_dict if header matches, otherwise keep cell blank
+            row_to_append.append(data_dict.get(header, ""))
+            
+        worksheet.append_row(row_to_append, value_input_option='USER_ENTERED')
+        print(f"  ✅ Written to {sheet_name} matching headers: {data_dict}")
     except Exception as e:
         print(f"  ❌ Sheet write exception: {str(e)}")
-        raise e  # Prevents script from logging a fake success if writing fails
+        raise e
 
 
 # ----------------------------------------------------------------------
@@ -121,9 +130,9 @@ def write_to_sheet(sheet_name, row_data):
 try:
     today     = datetime.datetime.utcnow()
     sync_date = today.strftime("%Y-%m-%d")
-    run_mode  = os.getenv("RUN_MODE", "weekly")  # "monthly" or "weekly"
+    run_mode  = os.getenv("RUN_MODE", "weekly")
 
-    print(f"🕐 Sync Date : {sync_date}")
+    print(f"1️⃣ Sync Date : {sync_date}")
     print(f"🚀 Run Mode  : {run_mode}")
 
     # ── Fetch Android data ────────────────────────────────────────────
@@ -136,25 +145,28 @@ try:
     # ── Write to Google Sheet ─────────────────────────────────────────
     print("\n--- SHEET WRITE ---")
     if run_mode == "monthly":
-        month_label = today.strftime("%B %Y")  # e.g. "June 2026"
-        # iOS columns are completely removed/omitted here so you can update them manually
-        write_to_sheet("Monthly_Stats", [month_label, android_cumulative])
+        month_label = today.strftime("%B %Y")
+        
+        # Maps keys directly to your Google Sheet column headers
+        payload = {
+            "Date": month_label,
+            "Android_Cumulative": android_cumulative
+        }
+        write_to_sheet_by_headers("Monthly_Stats", payload)
         print(f"  📅 Monthly row written for {month_label}")
 
     elif run_mode == "weekly":
-        week_label = today.strftime("%Y-%m-%d")  # Monday date
-        # iOS columns are completely removed/omitted here so you can update them manually
-        write_to_sheet("Weekly_Stats", [week_label, android_weekly])
+        week_label = today.strftime("%Y-%m-%d")
+        
+        # Maps keys directly to your Google Sheet column headers
+        payload = {
+            "Date": week_label,
+            "Android_Weekly": android_weekly
+        }
+        write_to_sheet_by_headers("Weekly_Stats", payload)
         print(f"  📅 Weekly row written for {week_label}")
 
     # ── Build README dashboard ────────────────────────────────────────
-    # iOS calculations are commented out completely. 
-    # The progress tracker now measures purely Android's progress toward the milestone.
-    
-    # ios_env_val = os.getenv("IOS_TOTAL_DOWNLOADS")
-    # IOS_TOTAL = int(ios_env_val) if ios_env_val and ios_env_val.strip() else 2775
-    # combined  = IOS_TOTAL + android_cumulative
-    
     combined  = android_cumulative
     GOAL      = 50000
     pct       = min(combined / GOAL, 1.0)
