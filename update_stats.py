@@ -1,3 +1,6 @@
+Here is your updated script with the iOS logic completely commented out, the environment variable fallback fixed, and the Google Sheets exception handling corrected so your logs remain accurate.
+
+```python
 import os
 import re
 import json
@@ -109,7 +112,8 @@ def write_to_sheet(sheet_name, row_data):
         worksheet.append_row(row_data, value_input_option='USER_ENTERED')
         print(f"  ✅ Written to {sheet_name}: {row_data}")
     except Exception as e:
-        print(f"  ❌ Sheet write exception: {e}")
+        print(f"  ❌ Sheet write exception: {str(e)}")
+        raise e  # Prevents script from logging a fake success if writing fails
 
 
 # ----------------------------------------------------------------------
@@ -134,19 +138,25 @@ try:
     print("\n--- SHEET WRITE ---")
     if run_mode == "monthly":
         month_label = today.strftime("%B %Y")  # e.g. "June 2026"
-        # iOS column left as 0 — you fill manually
-        write_to_sheet("Monthly_Stats", [month_label, 0, android_cumulative, android_cumulative])
+        # iOS columns are completely removed/omitted here so you can update them manually
+        write_to_sheet("Monthly_Stats", [month_label, android_cumulative])
         print(f"  📅 Monthly row written for {month_label}")
 
     elif run_mode == "weekly":
         week_label = today.strftime("%Y-%m-%d")  # Monday date
-        # iOS weekly left as 0 — you fill manually
-        write_to_sheet("Weekly_Stats", [week_label, 0, android_weekly, android_weekly])
+        # iOS columns are completely removed/omitted here so you can update them manually
+        write_to_sheet("Weekly_Stats", [week_label, android_weekly])
         print(f"  📅 Weekly row written for {week_label}")
 
     # ── Build README dashboard ────────────────────────────────────────
-    IOS_TOTAL = int(os.getenv("IOS_TOTAL_DOWNLOADS", "2775"))
-    combined  = IOS_TOTAL + android_cumulative
+    # iOS calculations are commented out completely. 
+    # The progress tracker now measures purely Android's progress toward the milestone.
+    
+    # ios_env_val = os.getenv("IOS_TOTAL_DOWNLOADS")
+    # IOS_TOTAL = int(ios_env_val) if ios_env_val and ios_env_val.strip() else 2775
+    # combined  = IOS_TOTAL + android_cumulative
+    
+    combined  = android_cumulative
     GOAL      = 50000
     pct       = min(combined / GOAL, 1.0)
     filled    = int(round(20 * pct))
@@ -158,7 +168,6 @@ try:
 +-------------------------------------------------------+
 | 📊 LIVE GROWTH PERFORMANCE (Sync Date: {sync_date}) |
 +-------------------------------------------------------+
-| 🍏 iOS Cumulative App Store : {IOS_TOTAL:,} units
 | 🤖 Android Google Play Tally: {android_cumulative:,} installs
 |
 | 🏆 GOAL MILESTONE           : {combined:,} / {GOAL:,}
@@ -170,8 +179,8 @@ try:
         readme = f.read()
 
     updated_readme = re.sub(
-        r'<!--START_DASHBOARD-->.*?<!--END_DASHBOARD-->',
-        f'<!--START_DASHBOARD-->\n{dashboard_content}\n<!--END_DASHBOARD-->',
+        r'.*?',
+        f'\n{dashboard_content}\n',
         readme,
         flags=re.DOTALL
     )
@@ -184,3 +193,5 @@ try:
 except Exception as main_err:
     print(f"\n❌ Pipeline failure: {main_err}")
     raise
+
+```
