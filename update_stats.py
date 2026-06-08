@@ -95,7 +95,7 @@ def write_to_sheet_by_headers(sheet_name, data_dict):
         worksheet   = sh.worksheet(sheet_name)
         
         # Read the top row of headers from the sheet
-        headers = worksheet.row_values(1)
+        headers = [h.strip() for h in worksheet.row_values(1)]
         
         # Build out a row matched perfectly to the sheet's columns
         row_to_append = []
@@ -145,16 +145,20 @@ try:
         # ── Write to Google Sheet ─────────────────────────────────────────
         print("--- SHEET WRITE ---")
         if run_mode == "monthly":
-            month_label = today.strftime("%B %Y")
+            month_label = today.strftime("%B %Y")  # e.g., "June 2026"
+            
+            # FIXED: Payload keys match exact layout requirements ("Month" & "Android")
             payload = {
-                "Date": month_label,
-                "Android_Cumulative": android_cumulative
+                "Month": month_label,
+                "Android": android_cumulative
             }
             write_to_sheet_by_headers(app['monthly_sheet'], payload)
             print(f"  📅 Monthly row written for {app['name']} to {app['monthly_sheet']}")
 
         elif run_mode == "weekly":
             week_label = today.strftime("%d/%m/%Y")
+            
+            # If your weekly sheet headers also use "Week_Date" and "Android_Weekly"
             payload = {
                 "Week_Date": week_label,
                 "Android_Weekly": android_cumulative 
@@ -169,7 +173,6 @@ try:
     filled    = int(round(20 * pct))
     bar       = '█' * filled + '░' * (20 - filled)
 
-    # Reconstruct multi-app dynamic log layout
     apps_performance_log = "\n".join(dashboard_lines)
 
     dashboard_content = f"""```text
