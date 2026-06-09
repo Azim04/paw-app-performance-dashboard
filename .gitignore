@@ -3,8 +3,11 @@
 /.pnp
 .pnp.js
 .yarn/install-state.gz
+wedding-dashboard/node_modules/
 
 # Next.js
+wedding-dashboard/.next/
+wedding-dashboard/out/
 **/next
 **/.next/
 **/out/
