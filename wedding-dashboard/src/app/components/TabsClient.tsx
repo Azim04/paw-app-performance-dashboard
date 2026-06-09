@@ -4,17 +4,15 @@ import { useState } from "react";
 import type { DashboardData } from "@/lib/sheets";
 import CombinedSection from "./CombinedSection";
 import AppSection from "./AppSection";
-import { Layers, Building2, Heart } from "lucide-react";
+import { Layers, Heart } from "lucide-react";
 import Image from "next/image";
 
-type IconType =
-  | React.ComponentType<{ size?: number; className?: string }>
-  | string;
+type IconProp = React.ComponentType<any> | string;
 
 type Tab = {
   id: "combined" | "business" | "couple";
   label: string;
-  icon: IconType;
+  icon: IconProp;
 };
 
 const TABS: Tab[] = [
@@ -40,28 +38,35 @@ export default function TabsClient({ data }: { data: DashboardData }) {
     "combined",
   );
 
-  const renderIcon = (icon: IconType, isActive: boolean) => {
+  const renderIcon = (icon: IconProp, isActive: boolean) => {
     if (typeof icon === "string") {
-      // It's an image path
+      // Image (SVG)
       return (
         <Image
           src={icon}
-          alt={""}
+          alt=""
           width={18}
           height={18}
-          className={`transition-colors ${isActive ? "brightness-110" : "opacity-75"}`}
+          className={`transition-all ${isActive ? "brightness-110" : "opacity-75"}`}
         />
       );
-    } else {
-      // It's a Lucide icon component
-      const IconComponent = icon;
-      return <IconComponent size={18} />;
     }
+
+    // Lucide Icon
+    const IconComponent = icon as React.ComponentType<{
+      size?: number;
+      className?: string;
+    }>;
+    return (
+      <IconComponent
+        size={18}
+        className={isActive ? "text-white" : "text-zinc-500"}
+      />
+    );
   };
 
   return (
     <>
-      {/* Tab bar */}
       <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit mb-8">
         {TABS.map(({ id, label, icon }) => {
           const isActive = active === id;
@@ -85,7 +90,7 @@ export default function TabsClient({ data }: { data: DashboardData }) {
         })}
       </div>
 
-      {/* Tab content */}
+      {/* Tab Content */}
       {active === "combined" && (
         <CombinedSection business={data.business} couple={data.couple} />
       )}
