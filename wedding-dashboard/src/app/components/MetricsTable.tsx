@@ -9,79 +9,122 @@ type Props = {
   progressBarColor: string;
 };
 
-export default function MetricsTable({ metrics, accentColor, progressBarColor }: Props) {
+export default function MetricsTable({
+  metrics,
+  accentColor,
+  progressBarColor,
+}: Props) {
   const m = metrics;
 
-  const rows: { label: string; value: React.ReactNode; note?: React.ReactNode }[] = [
+  const rows: {
+    label: string;
+    value: React.ReactNode;
+    note?: React.ReactNode;
+  }[] = [
     {
       label: "Total downloads",
-      value: <span className="font-semibold text-white">{fmt(m.totalDownloads)}</span>,
-      note: "Cumulative (all time)",
+      value: (
+        <span className="font-semibold text-white">
+          {fmt(m.totalDownloads)}
+        </span>
+      ),
+      note: "All time",
     },
     {
       label: "iOS downloads",
       value: fmt(m.totalIOS),
-      note: `${m.iosPct.toFixed(1)}% of total`,
+      note: `${m.iosPct.toFixed(1)}% of Total`,
     },
     {
       label: "Android downloads",
       value: fmt(m.totalAndroid),
-      note: `${m.androidPct.toFixed(1)}% of total`,
+      note: `${m.androidPct.toFixed(1)}% of Total`,
     },
     {
       label: "Month-over-month",
-      value: m.prevMonth ? <GrowthBadge value={m.momPercent} size="md" /> : <span className="text-zinc-500 text-sm">No prior month</span>,
-      note: m.prevMonth ? `${m.momAbsolute >= 0 ? "+" : ""}${fmt(m.momAbsolute)} downloads` : undefined,
+      value: m.prevMonth ? (
+        <GrowthBadge value={m.momPercent} size="md" />
+      ) : (
+        <span className="text-zinc-500 text-sm">No prior month</span>
+      ),
+      note: m.prevMonth
+        ? `${m.momAbsolute >= 0 ? "+" : ""}${fmt(m.momAbsolute)} Downloads`
+        : undefined,
     },
     {
       label: "Week-over-week",
-      value: m.prevWeek ? <GrowthBadge value={m.wowPercent} size="md" /> : <span className="text-zinc-500 text-sm">No prior week</span>,
-      note: m.prevWeek ? `${m.wowAbsolute >= 0 ? "+" : ""}${fmt(m.wowAbsolute)} downloads` : undefined,
+      value: m.prevWeek ? (
+        <GrowthBadge value={m.wowPercent} size="md" />
+      ) : (
+        <span className="text-zinc-500 text-sm">No prior week</span>
+      ),
+      note: m.prevWeek
+        ? `${m.wowAbsolute >= 0 ? "+" : ""}${fmt(m.wowAbsolute)} Downloads`
+        : undefined,
     },
     {
-      label: "New this month",
-      value: m.thisMonthNewInstalls >= 0 ? `+${fmt(m.thisMonthNewInstalls)}` : fmt(m.thisMonthNewInstalls),
-      note: m.prevMonth ? `vs ${fmt(m.prevMonth.total)} last month` : "First recorded month",
+      label: "New This Month",
+      value:
+        m.thisMonthNewInstalls >= 0
+          ? `+${fmt(m.thisMonthNewInstalls)}`
+          : fmt(m.thisMonthNewInstalls),
+      note: m.prevMonth
+        ? `vs ${fmt(m.prevMonth.total)} Last Month`
+        : "First Recorded Month",
     },
     {
-      label: "Latest week total",
-      value: m.latestWeek ? fmt(m.latestWeek.total) : "—",
+      label: "Latest Week Downloads",
+      value: m.latestWeek ? fmt(m.latestWeekDownloads) : "—",
       note: m.latestWeek ? m.latestWeek.week : undefined,
     },
     {
-      label: "Avg weekly downloads",
+      label: "Avg Weekly Downloads",
       value: fmtShort(m.avgWeeklyDownloads),
-      note: "Mean across all logged weeks",
+      note: "Avg Weekly Downloads",
     },
     {
-      label: "Platform split",
+      label: "Platform Split",
       value: (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-blue-400">iOS {m.iosPct.toFixed(0)}%</span>
           <span className="text-zinc-600">/</span>
-          <span className="text-green-400">Android {m.androidPct.toFixed(0)}%</span>
+          <span className="text-green-400">
+            Android {m.androidPct.toFixed(0)}%
+          </span>
         </div>
       ),
     },
     {
-      label: "Peak month",
+      label: "Peak Month",
       value: m.peakMonth ? fmt(m.peakMonth.total) : "—",
-      note: m.peakMonth?.month,
+      note: m.peakMonth
+        ? `${m.peakMonth.month} · Most Downloads In A Month`
+        : undefined,
     },
     {
-      label: "Peak week",
+      label: "Peak Week",
       value: m.peakWeek ? fmt(m.peakWeek.total) : "—",
-      note: m.peakWeek?.week,
+      note: m.peakWeek
+        ? `${m.peakWeek.week} · Most Downloads In One Week`
+        : undefined,
     },
     {
-      label: "Goal progress (50K)",
+      label: "Goal Progress (50K)",
       value: (
         <div className="w-full">
           <div className="flex justify-between mb-1 text-sm">
-            <span className={`font-medium ${accentColor}`}>{m.goalProgress.toFixed(1)}%</span>
-            <span className="text-zinc-500">{fmt(m.remainingToGoal)} remaining</span>
+            <span className={`font-medium ${accentColor}`}>
+              {m.goalProgress.toFixed(1)}%
+            </span>
+            <span className="text-zinc-500">
+              {fmt(m.remainingToGoal)} remaining
+            </span>
           </div>
-          <ProgressBar value={m.goalProgress} color={progressBarColor} height="h-1.5" />
+          <ProgressBar
+            value={m.goalProgress}
+            color={progressBarColor}
+            height="h-1.5"
+          />
         </div>
       ),
     },
@@ -91,10 +134,14 @@ export default function MetricsTable({ metrics, accentColor, progressBarColor }:
     <div className="divide-y divide-zinc-800">
       {rows.map((row, i) => (
         <div key={i} className="flex items-start justify-between py-3.5 gap-4">
-          <span className="text-[13px] text-zinc-400 shrink-0 pt-0.5">{row.label}</span>
+          <span className="text-[13px] text-zinc-400 shrink-0 pt-0.5">
+            {row.label}
+          </span>
           <div className="text-right">
             <div className="text-[14px] text-zinc-200">{row.value}</div>
-            {row.note && <div className="text-[11px] text-zinc-500 mt-0.5">{row.note}</div>}
+            {row.note && (
+              <div className="text-[11px] text-zinc-500 mt-0.5">{row.note}</div>
+            )}
           </div>
         </div>
       ))}

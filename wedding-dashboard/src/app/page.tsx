@@ -1,10 +1,8 @@
+import { assessFreshness } from "@/lib/freshness";
 import { fetchDashboardData } from "@/lib/sheets";
-import { fmt } from "@/lib/format";
-import TabsClient from "./components/TabsClient";
-import { RefreshCw } from "lucide-react";
-import Image from "next/image";
+import DashboardClient from "./components/DashboardClient";
 
-export const revalidate = 3600; // revalidate every hour
+export const revalidate = 3600;
 
 export default async function DashboardPage() {
   let data;
@@ -32,55 +30,12 @@ export default async function DashboardPage() {
     );
   }
 
-  const bizTotal = data.business.monthly.at(-1)?.total ?? 0;
-  const cplTotal = data.couple.monthly.at(-1)?.total ?? 0;
-  const combined = bizTotal + cplTotal;
-  const fetchTime = new Date(data.fetchedAt).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const freshness = assessFreshness(data);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-10">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
-          <div>
-            <div className="flex items-center gap-3">
-              <Image
-                src="/paw_brand_logo.svg"
-                alt="Mobile Apps Logo"
-                width={300}
-                height={90.81}
-                className="text-[#863AC1]"
-              />
-            </div>
-            <p className="text-xs font-medium tracking-widest text-zinc-600 uppercase mb-2">
-              Variety Vintage Technologies Pvt. Ltd.
-            </p>
-            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">
-              App Download Tracker
-            </h1>
-            <p className="text-zinc-500 mt-2 text-sm">
-              Plan A Wedding - Business &amp; Couple · Live from Google Sheets
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="text-3xl font-bold text-white">
-              {fmt(combined)}
-              <span className="text-zinc-600 text-lg font-normal ml-1">
-                total
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-600">
-              <RefreshCw size={11} />
-              Synced {fetchTime}
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs + content */}
-        <TabsClient data={data} />
+        <DashboardClient initialData={data} initialFreshness={freshness} />
       </div>
     </div>
   );

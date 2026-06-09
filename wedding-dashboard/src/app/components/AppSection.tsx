@@ -63,7 +63,7 @@ export default function AppSection({
         />
         <KpiCard
           label="This week"
-          value={m.latestWeek ? fmt(m.latestWeek.total) : "—"}
+          value={m.latestWeek ? fmt(m.latestWeekDownloads) : "—"}
           icon={<Calendar size={16} />}
           sub={
             m.prevWeek ? (
@@ -163,9 +163,9 @@ export default function AppSection({
             </h3>
             <span className={`ml-auto text-xs ${accent}`}>{appTag}</span>
           </div>
-          {data.monthly.length > 0 ? (
+          {m.monthlyDeltas.length > 1 ? (
             <MonthlyBarChart
-              data={data.monthly}
+              data={m.monthlyDeltas.slice(1)}
               iosColor={iosColor}
               androidColor={androidColor}
             />
@@ -210,7 +210,7 @@ export default function AppSection({
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-zinc-300">
-            Weekly download trend
+            Weekly Download Trend
           </h3>
           {m.prevWeek && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -218,11 +218,11 @@ export default function AppSection({
             </div>
           )}
         </div>
-        {data.weekly.length > 0 ? (
+        {m.weeklyDeltas.length > 1 ? (
           <WeeklyLineChart
-            data={data.weekly}
+            data={m.weeklyDeltas.slice(1)}
             color={iosColor}
-            showPlatforms={true}
+            showPlatforms={false}
             iosColor={iosColor}
             androidColor={androidColor}
           />
@@ -232,8 +232,9 @@ export default function AppSection({
           </div>
         )}
         <p className="text-[11px] text-zinc-600 mt-3">
-          Dashed lines = iOS / Android breakdown. Solid = total. Dashed
-          horizontal = average.
+          Per-week download change (each point = snapshot minus prior week).
+          Dashed lines = iOS / Android. Solid = total. Dashed horizontal =
+          average.
         </p>
       </div>
 

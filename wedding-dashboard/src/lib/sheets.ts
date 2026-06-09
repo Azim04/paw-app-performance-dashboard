@@ -26,16 +26,22 @@ export type DashboardData = {
 };
 
 export type DerivedMetrics = {
-  // Volume
+  // Volume (cumulative — latest monthly snapshot)
   totalDownloads: number;
   totalIOS: number;
   totalAndroid: number;
 
-  // Latest period
+  // Latest cumulative snapshots (raw sheet values)
   latestMonth: MonthlyRow | null;
   latestWeek: WeeklyRow | null;
   prevMonth: MonthlyRow | null;
   prevWeek: WeeklyRow | null;
+
+  // Period deltas (downloads within each week/month, not cumulative)
+  weeklyDeltas: WeeklyRow[];
+  monthlyDeltas: MonthlyRow[];
+  latestWeekDownloads: number;
+  latestMonthDownloads: number;
 
   // Growth — monthly
   momAbsolute: number;
@@ -45,18 +51,18 @@ export type DerivedMetrics = {
   wowAbsolute: number;
   wowPercent: number;
 
-  // Platform split
+  // Platform split (from latest cumulative monthly snapshot)
   iosPct: number;
   androidPct: number;
 
-  // Weekly velocity (avg over all weeks logged)
+  // Weekly velocity (mean of per-week download deltas)
   avgWeeklyDownloads: number;
 
-  // Best ever
+  // Best period by downloads in that week/month (delta, not cumulative)
   peakMonth: MonthlyRow | null;
   peakWeek: WeeklyRow | null;
 
-  // This month new installs (total - prev month total)
+  // Downloads gained in the latest month (same as momAbsolute)
   thisMonthNewInstalls: number;
 
   // Goal
@@ -65,9 +71,52 @@ export type DerivedMetrics = {
   remainingToGoal: number;
 };
 
-async function fetchCSV(sheet: string): Promise<string[][]> {
+/** Convert cumulative snapshots into per-period download counts. */
+export function toWeeklyDeltas(rows: WeeklyRow[]): WeeklyRow[] {
+  return rows.map((row, i) => {
+    const prev = i > 0 ? rows[i - 1] : null;
+    return {
+      week: row.week,
+      ios: row.ios - (prev?.ios ?? 0),
+      android: row.android - (prev?.android ?? 0),
+      total: row.total - (prev?.total ?? 0),
+    };
+  });
+}
+
+/** Convert cumulative snapshots into per-period download counts. */
+export function toMonthlyDeltas(rows: MonthlyRow[]): MonthlyRow[] {
+  return rows.map((row, i) => {
+    const prev = i > 0 ? rows[i - 1] : null;
+    return {
+      month: row.month,
+      ios: row.ios - (prev?.ios ?? 0),
+      android: row.android - (prev?.android ?? 0),
+      total: row.total - (prev?.total ?? 0),
+    };
+  });
+}
+
+function peakByDelta<T extends { total: number }>(rows: T[]): T | null {
+  if (rows.length === 0) return null;
+  return rows.reduce((a, b) => (b.total > a.total ? b : a));
+}
+
+/** Skip the first snapshot — its delta is the full cumulative baseline, not one period. */
+function periodChanges<T>(deltas: T[]): T[] {
+  return deltas.length > 1 ? deltas.slice(1) : deltas;
+}
+
+type FetchOptions = {
+  fresh?: boolean;
+};
+
+async function fetchCSV(sheet: string, options?: FetchOptions): Promise<string[][]> {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
-  const res = await fetch(url, { next: { revalidate: 3600 } });
+  const res = await fetch(
+    url,
+    options?.fresh ? { cache: "no-store" } : { next: { revalidate: 3600 } },
+  );
   if (!res.ok) throw new Error(`Failed to fetch sheet: ${sheet}`);
   const text = await res.text();
   return text
@@ -111,12 +160,14 @@ function parseWeekly(rows: string[][]): WeeklyRow[] {
     }));
 }
 
-export async function fetchDashboardData(): Promise<DashboardData> {
+export async function fetchDashboardData(
+  options?: FetchOptions,
+): Promise<DashboardData> {
   const [bizMonthly, bizWeekly, cplMonthly, cplWeekly] = await Promise.all([
-    fetchCSV("Business_Monthly"),
-    fetchCSV("Business_Weekly"),
-    fetchCSV("Couple_Monthly"),
-    fetchCSV("Couple_Weekly"),
+    fetchCSV("Business_Monthly", options),
+    fetchCSV("Business_Weekly", options),
+    fetchCSV("Couple_Monthly", options),
+    fetchCSV("Couple_Weekly", options),
   ]);
 
   return {
@@ -135,42 +186,50 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 export function deriveMetrics(data: AppData, goalTotal = 50000): DerivedMetrics {
   const { monthly, weekly } = data;
 
+  const weeklyDeltas = toWeeklyDeltas(weekly);
+  const monthlyDeltas = toMonthlyDeltas(monthly);
+
   const latestMonth = monthly.length > 0 ? monthly[monthly.length - 1] : null;
   const prevMonth = monthly.length > 1 ? monthly[monthly.length - 2] : null;
   const latestWeek = weekly.length > 0 ? weekly[weekly.length - 1] : null;
   const prevWeek = weekly.length > 1 ? weekly[weekly.length - 2] : null;
 
+  const latestWeekDelta = weeklyDeltas.length > 0 ? weeklyDeltas[weeklyDeltas.length - 1] : null;
+  const latestMonthDelta = monthlyDeltas.length > 0 ? monthlyDeltas[monthlyDeltas.length - 1] : null;
+
   const totalDownloads = latestMonth?.total ?? 0;
   const totalIOS = latestMonth?.ios ?? 0;
   const totalAndroid = latestMonth?.android ?? 0;
 
-  const momAbsolute = latestMonth && prevMonth ? latestMonth.total - prevMonth.total : 0;
+  const momAbsolute = latestMonthDelta?.total ?? 0;
   const momPercent = prevMonth && prevMonth.total > 0
-    ? ((latestMonth!.total - prevMonth.total) / prevMonth.total) * 100
+    ? (momAbsolute / prevMonth.total) * 100
     : 0;
 
-  const wowAbsolute = latestWeek && prevWeek ? latestWeek.total - prevWeek.total : 0;
-  const wowPercent = prevWeek && prevWeek.total > 0
-    ? ((latestWeek!.total - prevWeek.total) / prevWeek.total) * 100
-    : 0;
+  const prevWeekDelta = weeklyDeltas.length > 1 ? weeklyDeltas[weeklyDeltas.length - 2] : null;
+  const wowAbsolute =
+    latestWeekDelta && prevWeekDelta
+      ? latestWeekDelta.total - prevWeekDelta.total
+      : 0;
+  const wowPercent =
+    prevWeekDelta && prevWeekDelta.total > 0
+      ? (wowAbsolute / prevWeekDelta.total) * 100
+      : 0;
 
   const iosPct = totalDownloads > 0 ? (totalIOS / totalDownloads) * 100 : 0;
   const androidPct = 100 - iosPct;
 
-  const avgWeeklyDownloads = weekly.length > 0
-    ? weekly.reduce((s, r) => s + r.total, 0) / weekly.length
+  const weeklyChanges = periodChanges(weeklyDeltas);
+  const monthlyChanges = periodChanges(monthlyDeltas);
+
+  const avgWeeklyDownloads = weeklyChanges.length > 0
+    ? weeklyChanges.reduce((s, r) => s + r.total, 0) / weeklyChanges.length
     : 0;
 
-  const peakMonth = monthly.length > 0
-    ? monthly.reduce((a, b) => (b.total > a.total ? b : a))
-    : null;
-  const peakWeek = weekly.length > 0
-    ? weekly.reduce((a, b) => (b.total > a.total ? b : a))
-    : null;
+  const peakMonth = peakByDelta(monthlyChanges);
+  const peakWeek = peakByDelta(weeklyChanges);
 
-  const thisMonthNewInstalls = latestMonth && prevMonth
-    ? latestMonth.total - prevMonth.total
-    : latestMonth?.total ?? 0;
+  const thisMonthNewInstalls = momAbsolute;
 
   const goalProgress = goalTotal > 0 ? Math.min((totalDownloads / goalTotal) * 100, 100) : 0;
   const remainingToGoal = Math.max(goalTotal - totalDownloads, 0);
@@ -178,6 +237,9 @@ export function deriveMetrics(data: AppData, goalTotal = 50000): DerivedMetrics 
   return {
     totalDownloads, totalIOS, totalAndroid,
     latestMonth, latestWeek, prevMonth, prevWeek,
+    weeklyDeltas, monthlyDeltas,
+    latestWeekDownloads: latestWeekDelta?.total ?? 0,
+    latestMonthDownloads: latestMonthDelta?.total ?? 0,
     momAbsolute, momPercent,
     wowAbsolute, wowPercent,
     iosPct, androidPct,

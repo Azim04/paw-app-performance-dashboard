@@ -250,8 +250,8 @@ export default function CombinedSection({ business, couple }: Props) {
                 ],
                 [
                   "Latest week",
-                  bm.latestWeek ? fmt(bm.latestWeek.total) : "—",
-                  cm.latestWeek ? fmt(cm.latestWeek.total) : "—",
+                  bm.latestWeek ? fmt(bm.latestWeekDownloads) : "—",
+                  cm.latestWeek ? fmt(cm.latestWeekDownloads) : "—",
                 ],
                 [
                   "Peak month",
