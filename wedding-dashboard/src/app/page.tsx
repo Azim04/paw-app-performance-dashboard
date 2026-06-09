@@ -2,6 +2,7 @@ import { fetchDashboardData } from "@/lib/sheets";
 import { fmt } from "@/lib/format";
 import TabsClient from "./components/TabsClient";
 import { RefreshCw } from "lucide-react";
+import Image from "next/image";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -19,9 +20,12 @@ export default async function DashboardPage() {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-400 text-lg font-medium mb-2">Failed to load data</div>
+          <div className="text-red-400 text-lg font-medium mb-2">
+            Failed to load data
+          </div>
           <p className="text-zinc-500 text-sm">
-            Make sure the Google Sheet is publicly accessible (Anyone with link → Viewer).
+            Make sure the Google Sheet is publicly accessible (Anyone with link
+            → Viewer).
           </p>
         </div>
       </div>
@@ -42,20 +46,31 @@ export default async function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
           <div>
+            <div className="flex items-center gap-3">
+              <Image
+                src="/paw_brand_logo.svg"
+                alt="Mobile Apps Logo"
+                width={300}
+                height={90.81}
+                className="text-[#863AC1]"
+              />
+            </div>
             <p className="text-xs font-medium tracking-widest text-zinc-600 uppercase mb-2">
-              Phundo Fintech India
+              Variety Vintage Technologies Pvt. Ltd.
             </p>
             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">
               App Download Tracker
             </h1>
             <p className="text-zinc-500 mt-2 text-sm">
-              Plan A Wedding — Business &amp; Couple · Live from Google Sheets
+              Plan A Wedding - Business &amp; Couple · Live from Google Sheets
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="text-3xl font-bold text-white">
               {fmt(combined)}
-              <span className="text-zinc-600 text-lg font-normal ml-1">total</span>
+              <span className="text-zinc-600 text-lg font-normal ml-1">
+                total
+              </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-zinc-600">
               <RefreshCw size={11} />

@@ -5,38 +5,84 @@ import type { DashboardData } from "@/lib/sheets";
 import CombinedSection from "./CombinedSection";
 import AppSection from "./AppSection";
 import { Layers, Building2, Heart } from "lucide-react";
+import Image from "next/image";
 
-type Props = {
-  data: DashboardData;
+type IconType =
+  | React.ComponentType<{ size?: number; className?: string }>
+  | string;
+
+type Tab = {
+  id: "combined" | "business" | "couple";
+  label: string;
+  icon: IconType;
 };
 
-const TABS = [
-  { id: "combined", label: "Portfolio", icon: Layers },
-  { id: "business", label: "Business", icon: Building2 },
-  { id: "couple", label: "Couple", icon: Heart },
-] as const;
+const TABS: Tab[] = [
+  {
+    id: "combined",
+    label: "Portfolio",
+    icon: Layers,
+  },
+  {
+    id: "business",
+    label: "Business",
+    icon: "/business_app_logo.svg",
+  },
+  {
+    id: "couple",
+    label: "Couple",
+    icon: "/couple_app_logo.svg",
+  },
+];
 
-export default function TabsClient({ data }: Props) {
-  const [active, setActive] = useState<"combined" | "business" | "couple">("combined");
+export default function TabsClient({ data }: { data: DashboardData }) {
+  const [active, setActive] = useState<"combined" | "business" | "couple">(
+    "combined",
+  );
+
+  const renderIcon = (icon: IconType, isActive: boolean) => {
+    if (typeof icon === "string") {
+      // It's an image path
+      return (
+        <Image
+          src={icon}
+          alt={""}
+          width={18}
+          height={18}
+          className={`transition-colors ${isActive ? "brightness-110" : "opacity-75"}`}
+        />
+      );
+    } else {
+      // It's a Lucide icon component
+      const IconComponent = icon;
+      return <IconComponent size={18} />;
+    }
+  };
 
   return (
     <>
       {/* Tab bar */}
       <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit mb-8">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActive(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              active === id
-                ? "bg-zinc-700 text-white shadow-sm"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            <Icon size={14} />
-            {label}
-          </button>
-        ))}
+        {TABS.map(({ id, label, icon }) => {
+          const isActive = active === id;
+
+          return (
+            <button
+              key={id}
+              onClick={() => setActive(id)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isActive
+                  ? "bg-zinc-700 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+              }`}
+            >
+              <div className="flex items-center justify-center w-5 h-5">
+                {renderIcon(icon, isActive)}
+              </div>
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}

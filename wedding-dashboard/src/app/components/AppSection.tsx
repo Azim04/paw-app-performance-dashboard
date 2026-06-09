@@ -8,25 +8,39 @@ import MetricsTable from "./MetricsTable";
 import { fmt, fmtShort } from "@/lib/format";
 import type { AppData } from "@/lib/sheets";
 import { deriveMetrics } from "@/lib/sheets";
+import Image from "next/image";
+
 import {
-  Download, TrendingUp, Target, Smartphone,
-  BarChart2, Calendar, Trophy, Zap,
+  Download,
+  TrendingUp,
+  Target,
+  Smartphone,
+  BarChart2,
+  Calendar,
+  Trophy,
+  Zap,
 } from "lucide-react";
 
 type Props = {
   appName: string;
   appTag: string;
   data: AppData;
-  accent: string;          // tailwind text color
-  borderAccent: string;    // tailwind border color
-  iosColor: string;        // hex
-  androidColor: string;    // hex
+  accent: string; // tailwind text color
+  borderAccent: string; // tailwind border color
+  iosColor: string; // hex
+  androidColor: string; // hex
   progressBarColor: string; // tailwind bg color
 };
 
 export default function AppSection({
-  appName, appTag, data, accent, borderAccent,
-  iosColor, androidColor, progressBarColor,
+  appName,
+  appTag,
+  data,
+  accent,
+  borderAccent,
+  iosColor,
+  androidColor,
+  progressBarColor,
 }: Props) {
   const m = deriveMetrics(data);
 
@@ -71,8 +85,14 @@ export default function AppSection({
           label="Goal (50K)"
           value={`${m.goalProgress.toFixed(0)}%`}
           icon={<Target size={16} />}
-          sub={<span className="text-zinc-500 text-xs">{fmt(m.remainingToGoal)} remaining</span>}
-          footer={<ProgressBar value={m.goalProgress} color={progressBarColor} />}
+          sub={
+            <span className="text-zinc-500 text-xs">
+              {fmt(m.remainingToGoal)} remaining
+            </span>
+          }
+          footer={
+            <ProgressBar value={m.goalProgress} color={progressBarColor} />
+          }
           accent={borderAccent}
         />
       </div>
@@ -82,14 +102,38 @@ export default function AppSection({
         <KpiCard
           label="iOS downloads"
           value={fmt(m.totalIOS)}
-          icon={<Smartphone size={16} />}
-          sub={<span className="text-zinc-500 text-xs">{m.iosPct.toFixed(1)}% of total</span>}
+          icon={
+            <Image
+              src="/apple_logo.svg"
+              alt="Mobile Apps Logo"
+              width={16}
+              height={16}
+              className="text-[#863AC1]"
+            />
+          }
+          sub={
+            <span className="text-zinc-500 text-xs">
+              {m.iosPct.toFixed(1)}% of total
+            </span>
+          }
         />
         <KpiCard
           label="Android downloads"
           value={fmt(m.totalAndroid)}
-          icon={<Smartphone size={16} />}
-          sub={<span className="text-zinc-500 text-xs">{m.androidPct.toFixed(1)}% of total</span>}
+          icon={
+            <Image
+              src="/android_logo.svg"
+              alt="Mobile Apps Logo"
+              width={16}
+              height={16}
+              className="text-[#863AC1]"
+            />
+          }
+          sub={
+            <span className="text-zinc-500 text-xs">
+              {m.androidPct.toFixed(1)}% of total
+            </span>
+          }
         />
         <KpiCard
           label="New this month"
@@ -101,7 +145,11 @@ export default function AppSection({
           label="Peak month"
           value={m.peakMonth ? fmtShort(m.peakMonth.total) : "—"}
           icon={<Trophy size={16} />}
-          sub={<span className="text-zinc-500 text-xs">{m.peakMonth?.month ?? "N/A"}</span>}
+          sub={
+            <span className="text-zinc-500 text-xs">
+              {m.peakMonth?.month ?? "N/A"}
+            </span>
+          }
         />
       </div>
 
@@ -110,27 +158,49 @@ export default function AppSection({
         <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 size={15} className="text-zinc-500" />
-            <h3 className="text-sm font-medium text-zinc-300">Monthly downloads</h3>
+            <h3 className="text-sm font-medium text-zinc-300">
+              Monthly downloads
+            </h3>
             <span className={`ml-auto text-xs ${accent}`}>{appTag}</span>
           </div>
           {data.monthly.length > 0 ? (
-            <MonthlyBarChart data={data.monthly} iosColor={iosColor} androidColor={androidColor} />
+            <MonthlyBarChart
+              data={data.monthly}
+              iosColor={iosColor}
+              androidColor={androidColor}
+            />
           ) : (
-            <div className="h-48 flex items-center justify-center text-zinc-600 text-sm">No monthly data yet</div>
+            <div className="h-48 flex items-center justify-center text-zinc-600 text-sm">
+              No monthly data yet
+            </div>
           )}
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-zinc-300 mb-4">Platform split</h3>
-          <PlatformDonut ios={m.totalIOS} android={m.totalAndroid} iosColor={iosColor} androidColor={androidColor} />
+          <h3 className="text-sm font-medium text-zinc-300 mb-4">
+            Platform split
+          </h3>
+          <PlatformDonut
+            ios={m.totalIOS}
+            android={m.totalAndroid}
+            iosColor={iosColor}
+            androidColor={androidColor}
+          />
           <div className="mt-3 grid grid-cols-2 gap-2 text-center">
             <div className="bg-zinc-800 rounded-lg p-2">
               <div className="text-xs text-zinc-500 mb-0.5">iOS</div>
-              <div className="text-sm font-medium" style={{ color: iosColor }}>{m.iosPct.toFixed(0)}%</div>
+              <div className="text-sm font-medium" style={{ color: iosColor }}>
+                {m.iosPct.toFixed(0)}%
+              </div>
             </div>
             <div className="bg-zinc-800 rounded-lg p-2">
               <div className="text-xs text-zinc-500 mb-0.5">Android</div>
-              <div className="text-sm font-medium" style={{ color: androidColor }}>{m.androidPct.toFixed(0)}%</div>
+              <div
+                className="text-sm font-medium"
+                style={{ color: androidColor }}
+              >
+                {m.androidPct.toFixed(0)}%
+              </div>
             </div>
           </div>
         </div>
@@ -139,7 +209,9 @@ export default function AppSection({
       {/* Weekly chart */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-zinc-300">Weekly download trend</h3>
+          <h3 className="text-sm font-medium text-zinc-300">
+            Weekly download trend
+          </h3>
           {m.prevWeek && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               WoW: <GrowthBadge value={m.wowPercent} />
@@ -155,16 +227,29 @@ export default function AppSection({
             androidColor={androidColor}
           />
         ) : (
-          <div className="h-40 flex items-center justify-center text-zinc-600 text-sm">No weekly data yet</div>
+          <div className="h-40 flex items-center justify-center text-zinc-600 text-sm">
+            No weekly data yet
+          </div>
         )}
-        <p className="text-[11px] text-zinc-600 mt-3">Dashed lines = iOS / Android breakdown. Solid = total. Dashed horizontal = average.</p>
+        <p className="text-[11px] text-zinc-600 mt-3">
+          Dashed lines = iOS / Android breakdown. Solid = total. Dashed
+          horizontal = average.
+        </p>
       </div>
 
       {/* Full metrics table */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-        <h3 className="text-sm font-medium text-zinc-300 mb-1">All derived metrics</h3>
-        <p className="text-xs text-zinc-600 mb-4">Every stat computable from your current data</p>
-        <MetricsTable metrics={m} accentColor={accent} progressBarColor={progressBarColor} />
+        <h3 className="text-sm font-medium text-zinc-300 mb-1">
+          All derived metrics
+        </h3>
+        <p className="text-xs text-zinc-600 mb-4">
+          Every stat computable from your current data
+        </p>
+        <MetricsTable
+          metrics={m}
+          accentColor={accent}
+          progressBarColor={progressBarColor}
+        />
       </div>
     </div>
   );
