@@ -15,10 +15,8 @@ GOOGLE_BUCKET_NAME   = os.getenv("GOOGLE_BUCKET_NAME")
 GCP_KEY_JSON         = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 SPREADSHEET_ID       = "1ydkkBv6DKesQDu-xUHrbq-W_-jk-dskdpNVz1f-9-G0"
 
-# Original package fallback if env variable is used elsewhere
 DEFAULT_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME")
 
-# Mapping configurations for both mobile applications
 APPS_CONFIG = [
     {
         "name": "Original App",
@@ -39,7 +37,7 @@ APPS_CONFIG = [
 # ----------------------------------------------------------------------
 def get_gcp_credentials():
     if not GCP_KEY_JSON:
-        raise ValueError("❌ Critical Error: The environment variable 'GCP_SERVICE_ACCOUNT_KEY' is completely empty or missing from the GitHub runner environment.")
+        raise ValueError("❌ Critical Error: The environment variable 'GCP_SERVICE_ACCOUNT_KEY' is completely empty or missing.")
     info = json.loads(GCP_KEY_JSON)
     return service_account.Credentials.from_service_account_info(
         info,
@@ -49,48 +47,83 @@ def get_gcp_credentials():
         ]
     )
 
-def fetch_google_cumulative(package_name):
-    """Sum Install events across all monthly GCS overview files for a specific package"""
+def fetch_and_process_gcs_data(package_name, sheet_name, run_mode, today):
+    """Processes GCS files, parses all columns, sums metrics, and appends to Google Sheets"""
     if not package_name:
         print("  ⚠️ Package name missing. Skipping fetch.")
         return 0
+        
     try:
         credentials = get_gcp_credentials()
         client      = storage.Client(credentials=credentials)
         prefix      = f"stats/installs/installs_{package_name}_"
         all_blobs   = list(client.list_blobs(GOOGLE_BUCKET_NAME, prefix=prefix))
         overview_blobs = [b for b in all_blobs if b.name.endswith('_overview.csv')]
-        print(f"  Found {len(overview_blobs)} monthly overview files for {package_name}")
+        print(f"  Found {len(overview_blobs)} overview files for {package_name}")
 
-        running_totals = {}
-        for blob in sorted(overview_blobs, key=lambda b: b.name):
+        # Track grand total cumulative installs across ALL time for the README dashboard
+        grand_total_user_installs = 0
+        
+        # We target the most recent file for extracting detailed row records
+        sorted_blobs = sorted(overview_blobs, key=lambda b: b.name)
+        if not sorted_blobs:
+            print(f"  ⚠️ No CSV overview logs discovered for {package_name}")
+            return 0
+
+        # Calculate grand cumulative user installs across all historical monthly logs
+        for blob in sorted_blobs:
             try:
                 content = blob.download_as_text()
-                df      = pd.read_csv(io.StringIO(content))
-                
-                # 👇 NEW PRINT STATEMENT: Outputs the contents of the fetched CSV file 👇
-                print(f"\n--- 📄 Content Preview for blob: {blob.name} ---")
-                print(df.head(5).to_string())  # Prints the first 5 rows cleanly in the console
-                print("-" * 60 + "\n")
-                
-                for col in ['Daily Device Installs', 'Daily User Installs',
-                            'Active Device Installs', 'Install events']:
-                    if col in df.columns:
-                        val = pd.to_numeric(df[col], errors='coerce').fillna(0).sum()
-                        running_totals[col] = running_totals.get(col, 0) + int(val)
+                df = pd.read_csv(io.StringIO(content))
+                if 'Daily User Installs' in df.columns:
+                    grand_total_user_installs += int(pd.to_numeric(df['Daily User Installs'], errors='coerce').fillna(0).sum())
             except Exception as e:
-                print(f"  ⚠️ Skipped {blob.name}: {e}")
+                print(f"  ⚠️ Error parsing historical file {blob.name}: {e}")
 
-        print("  📊 Grand totals per column:")
-        for col, val in running_totals.items():
-            print(f"     {col}: {val:,}")
+        # Get data from the latest active file to push all metrics into the spreadsheet rows
+        latest_blob = sorted_blobs[-1]
+        print(f"  📄 Processing latest active log data from: {latest_blob.name}")
+        content = latest_blob.download_as_text()
+        df = pd.read_csv(io.StringIO(content))
+        
+        # Clean data frame columns to match dictionary indexing safely
+        df.columns = [col.strip() for col in df.columns]
 
-        return running_totals.get('Daily User Installs', 0)
+        # Determine how many records we write based on run mode
+        # If weekly: extract the last 7 entries. If monthly: pass the whole month file.
+        target_df = df.tail(7) if run_mode == "weekly" else df
+
+        print(f"  ✍️ Pushing {len(target_df)} rows of complete console data fields to {sheet_name}...")
+        
+        # Iterate over rows to build dynamic payload mappings for all parameters
+        for _, row in target_df.iterrows():
+            payload = {
+                # Sync tags
+                "Month": today.strftime("%B %Y"),
+                "Week_Date": today.strftime("%d/%m/%Y"),
+                
+                # Direct metrics from file source row
+                "Date": str(row.get("Date", "")),
+                "Package name": str(row.get("Package name", package_name)),
+                "Daily Device Installs": int(pd.to_numeric(row.get("Daily Device Installs"), errors='coerce') or 0),
+                "Daily Device Uninstalls": int(pd.to_numeric(row.get("Daily Device Uninstalls"), errors='coerce') or 0),
+                "Daily Device Upgrades": int(pd.to_numeric(row.get("Daily Device Upgrades"), errors='coerce') or 0),
+                "Total User Installs": int(pd.to_numeric(row.get("Total User Installs"), errors='coerce') or 0),
+                "Daily User Installs": int(pd.to_numeric(row.get("Daily User Installs"), errors='coerce') or 0),
+                "Daily User Uninstalls": int(pd.to_numeric(row.get("Daily User Uninstalls"), errors='coerce') or 0),
+                "Active Device Installs": int(pd.to_numeric(row.get("Active Device Installs"), errors='coerce') or 0),
+                "Install events": int(pd.to_numeric(row.get("Install events"), errors='coerce') or 0),
+                "Update events": int(pd.to_numeric(row.get("Update events"), errors='coerce') or 0),
+                "Uninstall events": int(pd.to_numeric(row.get("Uninstall events"), errors='coerce') or 0),
+            }
+            
+            write_to_sheet_by_headers(sheet_name, payload)
+
+        return grand_total_user_installs
 
     except Exception as e:
-        print(f"  ❌ Google cumulative exception for {package_name}: {e}")
+        print(f"  ❌ Error processing telemetry metrics for {package_name}: {e}")
         return 0
-
 
 def write_to_sheet_by_headers(sheet_name, data_dict):
     """Appends a row to the sheet mapping dictionary keys straight to the column headers"""
@@ -100,20 +133,16 @@ def write_to_sheet_by_headers(sheet_name, data_dict):
         sh          = gc.open_by_key(SPREADSHEET_ID)
         worksheet   = sh.worksheet(sheet_name)
         
-        # Read the top row of headers from the sheet
         headers = [h.strip() for h in worksheet.row_values(1)]
         
-        # Build out a row matched perfectly to the sheet's columns
         row_to_append = []
         for header in headers:
             row_to_append.append(data_dict.get(header, ""))
             
         worksheet.append_row(row_to_append, value_input_option='USER_ENTERED')
-        print(f"  ✅ Written to {sheet_name} matching headers: {data_dict}")
     except Exception as e:
         print(f"  ❌ Sheet write exception on {sheet_name}: {str(e)}")
         raise e
-
 
 # ----------------------------------------------------------------------
 # 3. CORE PROCESSING PIPELINE
@@ -129,46 +158,18 @@ try:
     total_combined_installs = 0
     dashboard_lines = []
 
-    # Loop through each configured application sequentially
     for app in APPS_CONFIG:
         print(f"\n=======================================================")
         print(f" PROCESSING APP: {app['name']} ({app['package_name']})")
         print(f"=======================================================")
         
-        if not app['package_name']:
-            print("❌ Skipping application profile: Package name variable is unassigned.")
-            continue
-
-        # ── Fetch Android data ────────────────────────────────────────────
-        print("--- ANDROID FETCH ---")
-        android_cumulative = fetch_google_cumulative(app['package_name'])
-        print(f"  ✅ Android cumulative : {android_cumulative:,}")
+        target_sheet = app['monthly_sheet'] if run_mode == "monthly" else app['weekly_sheet']
         
-        # Add to cumulative tracker across all applications
+        # Execute processing engine
+        android_cumulative = fetch_and_process_gcs_data(app['package_name'], target_sheet, run_mode, today)
+        
         total_combined_installs += android_cumulative
         dashboard_lines.append(f"| 🤖 {app['name']} Tally: {android_cumulative:,} installs")
-
-        # ── Write to Google Sheet ─────────────────────────────────────────
-        print("--- SHEET WRITE ---")
-        if run_mode == "monthly":
-            month_label = today.strftime("%B %Y")  # e.g., "June 2026"
-            
-            payload = {
-                "Month": month_label,
-                "Android": android_cumulative
-            }
-            write_to_sheet_by_headers(app['monthly_sheet'], payload)
-            print(f"  📅 Monthly row written for {app['name']} to {app['monthly_sheet']}")
-
-        elif run_mode == "weekly":
-            week_label = today.strftime("%d/%m/%Y")
-            
-            payload = {
-                "Week_Date": week_label,
-                "Android_Weekly": android_cumulative 
-            }
-            write_to_sheet_by_headers(app['weekly_sheet'], payload)
-            print(f"  📅 Weekly row written for {app['name']} to {app['weekly_sheet']}")
 
     # ── Build Combined README dashboard ────────────────────────────────
     print("\n--- UPDATING METRICS DASHBOARD ---")
@@ -205,7 +206,7 @@ try:
     with open("README.md", "w", encoding="utf-8") as f:
         f.write(updated_readme)
 
-    print("✅ README update cycle sequence finished successfully.")
+    print("✅ Full telemetry processing cycle completed successfully.")
 
 except Exception as main_err:
     print(f"\n❌ Pipeline failure: {main_err}")
