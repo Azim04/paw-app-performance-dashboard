@@ -67,6 +67,12 @@ def fetch_google_cumulative(package_name):
             try:
                 content = blob.download_as_text()
                 df      = pd.read_csv(io.StringIO(content))
+                
+                # 👇 NEW PRINT STATEMENT: Outputs the contents of the fetched CSV file 👇
+                print(f"\n--- 📄 Content Preview for blob: {blob.name} ---")
+                print(df.head(5).to_string())  # Prints the first 5 rows cleanly in the console
+                print("-" * 60 + "\n")
+                
                 for col in ['Daily Device Installs', 'Daily User Installs',
                             'Active Device Installs', 'Install events']:
                     if col in df.columns:
@@ -147,7 +153,6 @@ try:
         if run_mode == "monthly":
             month_label = today.strftime("%B %Y")  # e.g., "June 2026"
             
-            # FIXED: Payload keys match exact layout requirements ("Month" & "Android")
             payload = {
                 "Month": month_label,
                 "Android": android_cumulative
@@ -158,7 +163,6 @@ try:
         elif run_mode == "weekly":
             week_label = today.strftime("%d/%m/%Y")
             
-            # If your weekly sheet headers also use "Week_Date" and "Android_Weekly"
             payload = {
                 "Week_Date": week_label,
                 "Android_Weekly": android_cumulative 
