@@ -13,7 +13,7 @@ from google.cloud import storage
 # ----------------------------------------------------------------------
 GOOGLE_BUCKET_NAME   = os.getenv("GOOGLE_BUCKET_NAME")
 GCP_KEY_JSON         = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
-SPREADSHEET_ID       = "1ydkkBv6DKesQDu-xUHrbq-W_-jk-dskdpNVz1f-9-G0"
+SPREADSHEET_ID       = os.getenv("GOOGLE_SHEET_ID")
 
 # Original package fallback if env variable is used elsewhere
 DEFAULT_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME")
