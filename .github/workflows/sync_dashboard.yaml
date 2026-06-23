@@ -41,6 +41,7 @@ jobs:
       - name: Execute Pipeline Script
         env:
           GOOGLE_BUCKET_NAME:       ${{ secrets.GOOGLE_BUCKET_NAME }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }} 
           ANDROID_PACKAGE_NAME:     ${{ secrets.ANDROID_PACKAGE_NAME }}
           GCP_SERVICE_ACCOUNT_KEY:  ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           IOS_TOTAL_DOWNLOADS:      ${{ secrets.IOS_TOTAL_DOWNLOADS }}
