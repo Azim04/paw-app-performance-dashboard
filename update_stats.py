@@ -91,6 +91,7 @@ def write_to_sheet_by_headers(sheet_name, data_dict):
     try:
         credentials = get_gcp_credentials()
         gc          = gspread.authorize(credentials)
+        print(f"  🔑 Opening spreadsheet ID: '{SPREADSHEET_ID}'") 
         sh          = gc.open_by_key(SPREADSHEET_ID)
         worksheet   = sh.worksheet(sheet_name)
         
